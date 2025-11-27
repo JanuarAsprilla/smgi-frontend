@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { BellIcon, PlusIcon, Activity, PlayIcon, PauseIcon, Trash2Icon, Eye, AlertTriangleIcon } from 'lucide-react';
 import CreateMonitor from '../../components/monitoring/CreateMonitor';
 
@@ -131,7 +130,7 @@ export default function Monitoring() {
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
-              <div className="flex-shrink-0 bg-green-100 rounded-md p-3">
+              <div className="shrink-0 bg-green-100 rounded-md p-3">
                 <Activity className="h-6 w-6 text-green-600" />
               </div>
               <div className="ml-5 w-0 flex-1">
@@ -149,7 +148,7 @@ export default function Monitoring() {
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
-              <div className="flex-shrink-0 bg-red-100 rounded-md p-3">
+              <div className="shrink-0 bg-red-100 rounded-md p-3">
                 <AlertTriangleIcon className="h-6 w-6 text-red-600" />
               </div>
               <div className="ml-5 w-0 flex-1">
@@ -167,7 +166,7 @@ export default function Monitoring() {
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
-              <div className="flex-shrink-0 bg-orange-100 rounded-md p-3">
+              <div className="shrink-0 bg-orange-100 rounded-md p-3">
                 <BellIcon className="h-6 w-6 text-orange-600" />
               </div>
               <div className="ml-5 w-0 flex-1">
@@ -185,7 +184,7 @@ export default function Monitoring() {
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
-              <div className="flex-shrink-0 bg-blue-100 rounded-md p-3">
+              <div className="shrink-0 bg-blue-100 rounded-md p-3">
                 <Eye className="h-6 w-6 text-blue-600" />
               </div>
               <div className="ml-5 w-0 flex-1">

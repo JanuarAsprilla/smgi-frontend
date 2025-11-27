@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { PlayCircle, PauseCircle, CheckCircle2, XCircle, Clock, Eye, BarChart3, AlertTriangle, Loader2 } from 'lucide-react';
+import { PlayCircle, PauseCircle, CheckCircle2, XCircle, Clock, Eye, BarChart3, AlertTriangle } from 'lucide-react';
 
 // Mock data de procesos
 const mockProcesses = [
@@ -83,7 +82,7 @@ export default function Processes() {
   const [selectedProcess, setSelectedProcess] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  const getStatusIcon = (status: string, progress: number) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
         return <CheckCircle2 className="h-6 w-6 text-green-500" />;
@@ -161,7 +160,7 @@ export default function Processes() {
         <div className="bg-white overflow-hidden shadow rounded-lg border-l-4 border-purple-500">
           <div className="p-5">
             <div className="flex items-center">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <BarChart3 className="h-6 w-6 text-purple-600" />
               </div>
               <div className="ml-5 w-0 flex-1">
@@ -175,7 +174,7 @@ export default function Processes() {
         <div className="bg-white overflow-hidden shadow rounded-lg border-l-4 border-blue-500">
           <div className="p-5">
             <div className="flex items-center">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <PlayCircle className="h-6 w-6 text-blue-600" />
               </div>
               <div className="ml-5 w-0 flex-1">
@@ -189,7 +188,7 @@ export default function Processes() {
         <div className="bg-white overflow-hidden shadow rounded-lg border-l-4 border-green-500">
           <div className="p-5">
             <div className="flex items-center">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <CheckCircle2 className="h-6 w-6 text-green-600" />
               </div>
               <div className="ml-5 w-0 flex-1">
@@ -203,7 +202,7 @@ export default function Processes() {
         <div className="bg-white overflow-hidden shadow rounded-lg border-l-4 border-orange-500">
           <div className="p-5">
             <div className="flex items-center">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <AlertTriangle className="h-6 w-6 text-orange-600" />
               </div>
               <div className="ml-5 w-0 flex-1">
@@ -251,7 +250,7 @@ export default function Processes() {
               {/* Header del proceso */}
               <div className="flex items-start justify-between">
                 <div className="flex items-start space-x-4 flex-1">
-                  {getStatusIcon(process.status, process.progress)}
+                  {getStatusIcon(process.status)}
                   <div className="flex-1">
                     <div className="flex items-center space-x-3">
                       <h3 className="text-lg font-semibold text-gray-900">{process.name}</h3>

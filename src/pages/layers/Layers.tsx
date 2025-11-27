@@ -99,7 +99,7 @@ export default function Layers() {
       </div>
 
       {/* Barra de acciones para capas seleccionadas */}
-      {data?.results.length > 0 && (
+      {(data?.results?.length ?? 0) > 0 && (
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -144,7 +144,7 @@ export default function Layers() {
                 {/* Checkbox de selección */}
                 <button
                   onClick={() => toggleLayerSelection(layer.id)}
-                  className="flex-shrink-0"
+                  className="shrink-0"
                 >
                   {selectedLayers.includes(layer.id) ? (
                     <CheckSquare className="h-5 w-5 text-blue-600" />

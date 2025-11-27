@@ -53,7 +53,7 @@ export default function Dashboard() {
           <div key={stat.name} className="bg-white overflow-hidden shadow rounded-lg">
             <div className="p-5">
               <div className="flex items-center">
-                <div className={`flex-shrink-0 rounded-md p-3 ${stat.color}`}>
+                <div className={`shrink-0 rounded-md p-3 ${stat.color}`}>
                   <stat.icon className="h-6 w-6" />
                 </div>
                 <div className="ml-5 w-0 flex-1">

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Loader2, BrainCircuitIcon, Sparkles, PlayCircle, Clock } from 'lucide-react';
+import { X, Loader2, Sparkles, PlayCircle } from 'lucide-react';
 import { layerService } from '../../services/layerService';
 import { analysisService } from '../../services/analysisService';
 
@@ -101,7 +101,7 @@ export default function CreateProcess({ onClose, preSelectedLayers = [] }: Creat
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 my-8">
-        <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-purple-50 to-blue-50">
+        <div className="flex items-center justify-between p-6 border-b bg-linear-to-r from-purple-50 to-blue-50">
           <div className="flex items-center space-x-3">
             <div className="p-3 bg-purple-100 rounded-lg">
               <PlayCircle className="h-7 w-7 text-purple-600" />
@@ -278,9 +278,9 @@ export default function CreateProcess({ onClose, preSelectedLayers = [] }: Creat
             )}
           </div>
 
-          <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4">
+          <div className="bg-linear-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4">
             <div className="flex items-start space-x-3">
-              <Sparkles className="h-5 w-5 text-purple-600 mt-0.5 flex-shrink-0" />
+              <Sparkles className="h-5 w-5 text-purple-600 mt-0.5 shrink-0" />
               <div className="flex-1 text-sm">
                 <p className="font-medium text-purple-900">Proceso Inteligente Multi-Capa</p>
                 <p className="text-purple-700 mt-1">
@@ -310,7 +310,7 @@ export default function CreateProcess({ onClose, preSelectedLayers = [] }: Creat
             <button
               onClick={handleSubmit}
               disabled={createMutation.isPending || selectedLayers.length === 0 || !selectedAgent || !analysisType}
-              className="inline-flex items-center px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-5 py-2 text-sm font-medium text-white bg-linear-to-r from-purple-600 to-blue-600 rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {createMutation.isPending ? (
                 <>

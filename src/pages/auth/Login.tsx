@@ -29,7 +29,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-cyan-100">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-blue-50 to-cyan-100">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
         <div className="text-center">
           <MapIcon className="mx-auto h-12 w-12 text-blue-600" />
