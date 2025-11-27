@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { layerService } from '../../services/layerService';
-import { LayersIcon, DownloadIcon, Trash2Icon, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { LayersIcon, DownloadIcon, Trash2Icon, Loader2, PlusIcon, UploadIcon } from 'lucide-react';
+import LayerUpload from '../../components/layers/LayerUpload';
 
 export default function Layers() {
   const queryClient = useQueryClient();
   const [exportingId, setExportingId] = useState<number | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['layers'],
@@ -33,6 +35,7 @@ export default function Layers() {
       document.body.removeChild(a);
     } catch (error) {
       console.error('Error exportando:', error);
+      alert('Error al exportar la capa');
     } finally {
       setExportingId(null);
     }
@@ -48,13 +51,30 @@ export default function Layers() {
 
   return (
     <div className="space-y-6">
+      {/* Header con botones */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Capas Geoespaciales</h1>
-          <p className="mt-1 text-sm text-gray-500">Gestiona las capas de datos del sistema</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Gestiona las capas de datos del sistema
+          </p>
+        </div>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setShowUpload(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          >
+            <UploadIcon className="h-4 w-4 mr-2" />
+            Subir Capa
+          </button>
+          <button className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+            <PlusIcon className="h-4 w-4 mr-2" />
+            Nueva Capa
+          </button>
         </div>
       </div>
 
+      {/* Lista de capas */}
       <div className="bg-white shadow overflow-hidden sm:rounded-lg">
         <ul className="divide-y divide-gray-200">
           {data?.results.map((layer) => (
@@ -105,7 +125,11 @@ export default function Layers() {
                   </button>
                   
                   <button
-                    onClick={() => deleteMutation.mutate(layer.id)}
+                    onClick={() => {
+                      if (confirm('¿Estás seguro de eliminar esta capa?')) {
+                        deleteMutation.mutate(layer.id);
+                      }
+                    }}
                     className="inline-flex items-center px-3 py-1.5 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50"
                   >
                     <Trash2Icon className="h-3 w-3" />
@@ -121,9 +145,21 @@ export default function Layers() {
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <LayersIcon className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-2 text-sm font-medium text-gray-900">No hay capas</h3>
-          <p className="mt-1 text-sm text-gray-500">Comienza creando una nueva capa.</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Comienza subiendo una capa GeoJSON o Shapefile.
+          </p>
+          <button
+            onClick={() => setShowUpload(true)}
+            className="mt-4 inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          >
+            <UploadIcon className="h-4 w-4 mr-2" />
+            Subir Primera Capa
+          </button>
         </div>
       )}
+
+      {/* Modal de upload */}
+      {showUpload && <LayerUpload onClose={() => setShowUpload(false)} />}
     </div>
   );
 }
