@@ -1,5 +1,5 @@
 import api from './api';
-import { Analysis, PaginatedResponse } from '../types';
+import type { Analysis, PaginatedResponse } from '../types';
 
 export const analysisService = {
   getAnalyses: async (): Promise<PaginatedResponse<Analysis>> => {

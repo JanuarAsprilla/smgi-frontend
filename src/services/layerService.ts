@@ -1,5 +1,5 @@
 import api from './api';
-import { Layer, PaginatedResponse } from '../types';
+import type { Layer, PaginatedResponse } from '../types';
 
 export const layerService = {
   getLayers: async (): Promise<PaginatedResponse<Layer>> => {
