@@ -22,16 +22,17 @@ export interface Layer {
   created_at: string;
 }
 
+export interface PaginatedResponse<T> {
+  count: number;
+  results: T[];
+}
+
 export interface Analysis {
   id: number;
   layer: number;
   status: string;
   analysis_type: string;
   result?: any;
-  started_at?: string;
-}
-
-export interface PaginatedResponse<T> {
-  count: number;
-  results: T[];
+  started_at: string;
+  completed_at?: string;
 }

@@ -1,6 +1,20 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
-import { MapIcon, LayersIcon, BrainCircuitIcon, BellIcon, LayoutDashboardIcon, LogOutIcon } from 'lucide-react';
+import { MapIcon, LayersIcon, BrainCircuitIcon, BellIcon, LayoutDashboardIcon, LogOutIcon, PlayCircle } from 'lucide-react';
+
+// Banner de modo demo inline
+function DemoBanner() {
+  return (
+    <div className="bg-yellow-50 border-b border-yellow-200">
+      <div className="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8">
+        <p className="text-center text-sm text-yellow-800">
+          <span className="font-semibold">Modo Demo</span> - 
+          Datos de prueba. Para conectar con el backend real, cambia DEMO_MODE a false en los servicios.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function MainLayout() {
   const { user, logout } = useAuthStore();
@@ -15,12 +29,14 @@ export default function MainLayout() {
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboardIcon },
     { name: 'Capas', href: '/layers', icon: LayersIcon },
-    { name: 'Análisis IA', href: '/analysis', icon: BrainCircuitIcon },
+    { name: 'Procesos', href: '/processes', icon: PlayCircle },
+    { name: 'Análisis', href: '/analysis', icon: BrainCircuitIcon },
     { name: 'Monitoreo', href: '/monitoring', icon: BellIcon },
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <DemoBanner />
       <nav className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
@@ -29,7 +45,7 @@ export default function MainLayout() {
                 <MapIcon className="h-8 w-8 text-blue-600" />
                 <span className="ml-2 text-xl font-bold text-gray-900">SMGI</span>
               </div>
-              
+
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
                 {navigation.map((item) => (
                   <Link
@@ -47,7 +63,7 @@ export default function MainLayout() {
                 ))}
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-700">{user?.username || 'Usuario'}</span>
               <button
@@ -61,7 +77,7 @@ export default function MainLayout() {
           </div>
         </div>
       </nav>
-      
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Outlet />
       </main>

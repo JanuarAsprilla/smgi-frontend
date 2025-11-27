@@ -1,5 +1,5 @@
 import api from './api';
-import { Analysis, PaginatedResponse } from '../types';
+import type { Analysis, PaginatedResponse } from '../types';
 import { mockAnalyses } from './mockData';
 
 const DEMO_MODE = true;

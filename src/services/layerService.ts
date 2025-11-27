@@ -1,5 +1,5 @@
 import api from './api';
-import { Layer, PaginatedResponse } from '../types';
+import type { Layer, PaginatedResponse } from '../types';
 import { mockLayers } from './mockData';
 
 const DEMO_MODE = true;
@@ -20,7 +20,7 @@ export const layerService = {
   getLayer: async (id: number): Promise<Layer> => {
     if (DEMO_MODE) {
       await new Promise(resolve => setTimeout(resolve, 300));
-      const layer = mockLayers.find(l => l.id === id);
+      const layer: Layer | undefined = mockLayers.find((l: Layer) => l.id === id);
       if (!layer) throw new Error('Layer not found');
       return layer;
     }
@@ -32,11 +32,11 @@ export const layerService = {
     if (DEMO_MODE) {
       await new Promise(resolve => setTimeout(resolve, 800));
       const newLayer: Layer = {
-        id: Math.max(...mockLayers.map(l => l.id)) + 1,
+        id: Math.max(...mockLayers.map((l: Layer) => l.id)) + 1,
         name: layerData.name || 'Nueva Capa',
         description: layerData.description,
-        layer_type: 'vector',
-        geometry_type: 'Polygon',
+        layer_type: 'vector' as const,
+        geometry_type: 'Polygon' as const,
         srid: 4326,
         is_active: true,
         feature_count: 0,
@@ -62,7 +62,7 @@ export const layerService = {
   deleteLayer: async (id: number): Promise<void> => {
     if (DEMO_MODE) {
       await new Promise(resolve => setTimeout(resolve, 300));
-      const index = mockLayers.findIndex(l => l.id === id);
+      const index: number = mockLayers.findIndex((l: Layer) => l.id === id);
       if (index !== -1) {
         mockLayers.splice(index, 1);
       }
@@ -74,7 +74,7 @@ export const layerService = {
   exportLayer: async (id: number, format: 'shapefile' | 'geojson'): Promise<Blob> => {
     if (DEMO_MODE) {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      const layer = mockLayers.find(l => l.id === id);
+      const layer: Layer | undefined = mockLayers.find((l: Layer) => l.id === id);
       const content = JSON.stringify({
         type: 'FeatureCollection',
         name: layer?.name,
