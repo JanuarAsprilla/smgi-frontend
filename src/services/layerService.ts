@@ -2,7 +2,7 @@ import api from './api';
 import type { Layer, PaginatedResponse } from '../types';
 import { mockLayers } from './mockData';
 
-const DEMO_MODE = true;
+const DEMO_MODE = false;
 
 export const layerService = {
   getLayers: async (): Promise<PaginatedResponse<Layer>> => {

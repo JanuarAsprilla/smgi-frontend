@@ -2,7 +2,7 @@ import api from './api';
 import type { Analysis, PaginatedResponse } from '../types';
 import { mockAnalyses } from './mockData';
 
-const DEMO_MODE = true;
+const DEMO_MODE = false;
 
 // Mock agents para demo
 const mockAgents = [
