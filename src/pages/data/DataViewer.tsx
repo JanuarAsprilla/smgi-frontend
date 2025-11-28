@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
-import { ColDef, GridReadyEvent } from 'ag-grid-community';
+import type { ColDef, GridReadyEvent } from 'ag-grid-community';
 import { layerService } from '../../services/layerService';
 import { 
   Table2, 
