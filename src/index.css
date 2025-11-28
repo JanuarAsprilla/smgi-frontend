@@ -40,3 +40,29 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* AG Grid Custom Styles */
+.ag-theme-alpine {
+  --ag-header-height: 48px;
+  --ag-header-foreground-color: #374151;
+  --ag-header-background-color: #f9fafb;
+  --ag-header-cell-hover-background-color: #f3f4f6;
+  --ag-row-hover-color: #f0f9ff;
+  --ag-selected-row-background-color: #dbeafe;
+  --ag-border-color: #e5e7eb;
+  --ag-font-family: inherit;
+  --ag-font-size: 14px;
+}
+
+.ag-theme-alpine .ag-header-cell-label {
+  font-weight: 600;
+}
+
+.ag-theme-alpine .ag-cell {
+  display: flex;
+  align-items: center;
+}
+
+.ag-theme-alpine .ag-ltr .ag-cell {
+  border-right: 1px solid #f3f4f6;
+}
