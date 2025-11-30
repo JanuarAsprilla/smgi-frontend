@@ -12,6 +12,9 @@ import Processes from './pages/processes/Processes';
 import Analysis from './pages/analysis/Analysis';
 import Monitoring from './pages/monitoring/Monitoring';
 import UserManagement from './pages/admin/UserManagement';
+import Map from './pages/map/Map';
+import DataViewer from './pages/data/DataViewer';
+import NotificationSettings from './pages/settings/NotificationSettings';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,12 +35,12 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          {/* Public Routes */}
+          {/* ✅ RUTAS PÚBLICAS (SIN AUTENTICACIÓN) */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
 
-          {/* Private Routes */}
+          {/* ✅ RUTAS PRIVADAS (REQUIEREN LOGIN) */}
           <Route
             path="/"
             element={
@@ -52,6 +55,9 @@ function App() {
             <Route path="analysis" element={<Analysis />} />
             <Route path="monitoring" element={<Monitoring />} />
             <Route path="admin/users" element={<UserManagement />} />
+            <Route path="map" element={<Map />} />
+            <Route path="data" element={<DataViewer />} />
+            <Route path="settings/notifications" element={<NotificationSettings />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

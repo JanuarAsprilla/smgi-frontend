@@ -266,7 +266,7 @@ export default function DataViewer() {
 
       {/* Statistics */}
       {selectedLayerId && stats && (
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-b p-4">
+        <div className="bg-linear-to-r from-blue-50 to-purple-50 border-b p-4">
           <div className="grid grid-cols-4 gap-4">
             <div className="bg-white rounded-lg p-3 shadow-sm">
               <div className="flex items-center justify-between">
