@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Loader2, BrainCircuitIcon, Sparkles } from 'lucide-react';
-import { layerService } from '../../services/layerService';
-import { analysisService } from '../../services/analysisService';
+import { agentService, layerService, analysisService } from '../../services';
 
 interface CreateAnalysisProps {
   onClose: () => void;
@@ -15,14 +14,16 @@ export default function CreateAnalysis({ onClose }: CreateAnalysisProps) {
   const [analysisType, setAnalysisType] = useState('');
   const [prompt, setPrompt] = useState('');
 
-  const { data: layers } = useQuery({
+  const { data: layersData } = useQuery({
     queryKey: ['layers'],
-    queryFn: layerService.getLayers,
+    queryFn: () => layerService.getLayers(),
   });
+
+  const layers = layersData;
 
   const { data: agents } = useQuery({
     queryKey: ['agents'],
-    queryFn: analysisService.getAgents,
+    queryFn: () => agentService.getAgents(),
   });
 
   const createMutation = useMutation({
@@ -112,7 +113,7 @@ export default function CreateAnalysis({ onClose }: CreateAnalysisProps) {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Selecciona una capa</option>
-              {layers?.results.map((layer) => (
+              {layers?.results.map((layer: any) => (
                 <option key={layer.id} value={layer.id}>
                   {layer.name} ({layer.feature_count || 0} features)
                 </option>

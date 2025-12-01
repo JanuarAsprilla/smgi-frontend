@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, GridReadyEvent } from 'ag-grid-community';
-import { layerService } from '../../services/layerService';
+import { layerService } from '../../services';
 import { 
   Table2, 
   Download, 
@@ -27,7 +27,7 @@ export default function DataViewer() {
   // Obtener capas
   const { data: layersResponse, isLoading: loadingLayers } = useQuery({
     queryKey: ['layers'],
-    queryFn: layerService.getLayers,
+    queryFn: () => layerService.getLayers(),
   });
 
   const layers = layersResponse?.results || [];

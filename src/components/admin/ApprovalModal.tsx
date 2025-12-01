@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { userService } from '../../services/userService';
+import { userService } from '../../services';
 import { X, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 interface ApprovalModalProps {

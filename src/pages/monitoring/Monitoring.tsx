@@ -14,39 +14,9 @@ import {
   XCircle,
   Loader2,
 } from 'lucide-react';
-import api from '../../services/api';
-
-interface Monitor {
-  id: number;
-  name: string;
-  description: string;
-  monitor_type: string;
-  status: string;
-  is_active: boolean;
-  check_interval: number;
-  last_check: string | null;
-  next_check: string | null;
-  total_checks: number;
-  detections_count: number;
-  layers: number[];
-  agent?: {
-    id: number;
-    name: string;
-  };
-  parameters: Record<string, any>;
-}
-
-interface Detection {
-  id: number;
-  monitor: number;
-  title: string;
-  description: string;
-  severity: string;
-  status: string;
-  detected_at: string;
-  location?: any;
-  analysis_data: Record<string, any>;
-}
+import { monitoringService, agentService } from '../../services';
+import { layerService } from '../../services/layerService';
+import type { Monitor, Detection } from '../../types';
 
 export default function MonitoringConfig() {
   const queryClient = useQueryClient();
@@ -57,47 +27,31 @@ export default function MonitoringConfig() {
   // Fetch monitors
   const { data: monitorsData } = useQuery({
     queryKey: ['monitors'],
-    queryFn: async () => {
-      const { data } = await api.get('/monitoring/monitors/');
-      return data;
-    },
+    queryFn: () => monitoringService.getMonitors(),
   });
 
   // Fetch recent detections
   const { data: detectionsData } = useQuery({
     queryKey: ['detections'],
-    queryFn: async () => {
-      const { data } = await api.get('/monitoring/detections/');
-      return data;
-    },
+    queryFn: () => monitoringService.getDetections(),
   });
 
   // Fetch layers for selection
   const { data: layersData } = useQuery({
     queryKey: ['layers'],
-    queryFn: async () => {
-      const { data } = await api.get('/geodata/layers/');
-      return data;
-    },
+    queryFn: () => layerService.getLayers(),
   });
 
   // Fetch agents for selection
   const { data: agentsData } = useQuery({
     queryKey: ['agents'],
-    queryFn: async () => {
-      const { data } = await api.get('/agents/agents/');
-      return data;
-    },
+    queryFn: () => agentService.getAgents(),
   });
 
   // Toggle monitor mutation
   const toggleMonitorMutation = useMutation({
-    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
-      const { data } = await api.patch(`/monitoring/monitors/${id}/`, {
-        is_active: isActive,
-      });
-      return data;
-    },
+    mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
+      monitoringService.updateMonitor(id, { is_active: isActive }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['monitors'] });
     },
@@ -105,10 +59,7 @@ export default function MonitoringConfig() {
 
   // Run check mutation
   const runCheckMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const { data } = await api.post(`/monitoring/monitors/${id}/run-check/`);
-      return data;
-    },
+    mutationFn: (id: number) => monitoringService.executeMonitor(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['monitors'] });
       queryClient.invalidateQueries({ queryKey: ['detections'] });
@@ -117,10 +68,7 @@ export default function MonitoringConfig() {
 
   // Create monitor mutation
   const createMonitorMutation = useMutation({
-    mutationFn: async (monitorData: any) => {
-      const { data } = await api.post('/monitoring/monitors/', monitorData);
-      return data;
-    },
+    mutationFn: (monitorData: any) => monitoringService.createMonitor(monitorData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['monitors'] });
       setShowCreateModal(false);
@@ -280,7 +228,7 @@ export default function MonitoringConfig() {
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center">
-                      {getStatusIcon(monitor.status)}
+                      {getStatusIcon(monitor.status || 'idle')}
                       <div className="ml-3">
                         <h3 className="font-semibold text-gray-900">{monitor.name}</h3>
                         <p className="text-xs text-gray-500">{monitor.monitor_type}</p>

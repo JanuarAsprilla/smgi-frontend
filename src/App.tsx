@@ -11,6 +11,7 @@ import Layers from './pages/layers/Layers';
 import Processes from './pages/processes/Processes';
 import Analysis from './pages/analysis/Analysis';
 import Monitoring from './pages/monitoring/Monitoring';
+import AgentManager from './pages/agents/AgentManager';
 import UserManagement from './pages/admin/UserManagement';
 import Map from './pages/map/Map';
 import DataViewer from './pages/data/DataViewer';
@@ -53,6 +54,7 @@ function App() {
             <Route path="layers" element={<Layers />} />
             <Route path="processes" element={<Processes />} />
             <Route path="analysis" element={<Analysis />} />
+            <Route path="agents" element={<AgentManager />} />
             <Route path="monitoring" element={<Monitoring />} />
             <Route path="admin/users" element={<UserManagement />} />
             <Route path="map" element={<Map />} />

@@ -49,8 +49,6 @@ export interface ApprovalData {
   rejection_reason?: string;
 }
 
-const DEMO_MODE = false;
-
 export const userService = {
   register: async (data: RegisterData) => {
     const { data: response } = await api.post('/users/users/register/', data);
@@ -84,6 +82,33 @@ export const userService = {
 
   getAreas: async () => {
     const { data } = await api.get('/users/areas/');
+    return data;
+  },
+
+  // User Management functions
+  getUsers: async () => {
+    const { data } = await api.get('/users/users/');
+    return data;
+  },
+
+  updateUser: async (userId: number, userData: any) => {
+    const { data } = await api.patch(`/users/users/${userId}/`, userData);
+    return data;
+  },
+
+  approveOrRejectUser: async (userId: number, approvalData: { approved: boolean; rejection_reason?: string }) => {
+    const { data } = await api.post(`/users/users/${userId}/approve-reject/`, approvalData);
+    return data;
+  },
+
+  // Role Management functions
+  createRole: async (roleData: any) => {
+    const { data } = await api.post('/users/roles/', roleData);
+    return data;
+  },
+
+  updateRole: async (roleId: number, roleData: any) => {
+    const { data } = await api.patch(`/users/roles/${roleId}/`, roleData);
     return data;
   },
 };

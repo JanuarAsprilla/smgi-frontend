@@ -19,10 +19,12 @@ export default function CreateProcess({ onClose, preSelectedLayers = [] }: Creat
   const [enableMonitoring, setEnableMonitoring] = useState(false);
   const [monitoringFrequency, setMonitoringFrequency] = useState('3600');
 
-  const { data: layers } = useQuery({
+  const { data: layersData } = useQuery({
     queryKey: ['layers'],
-    queryFn: layerService.getLayers,
+    queryFn: () => layerService.getLayers(),
   });
+
+  const layers = layersData?.results || [];
 
   const { data: agents } = useQuery({
     queryKey: ['agents'],
@@ -136,7 +138,7 @@ export default function CreateProcess({ onClose, preSelectedLayers = [] }: Creat
               Capas a Analizar <span className="text-red-500">*</span>
             </label>
             <div className="border border-gray-300 rounded-lg p-4 space-y-2 max-h-48 overflow-y-auto bg-gray-50">
-              {layers?.results.map((layer) => (
+              {layers.map((layer: any) => (
                 <label
                   key={layer.id}
                   className={`flex items-center p-3 rounded-lg cursor-pointer transition-colors ${

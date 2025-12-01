@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { layerService } from '../../services/layerService';
+import { layerService } from '../../services';
 import { LayersIcon, DownloadIcon, Trash2Icon, Loader2, UploadIcon, BrainCircuitIcon, CheckSquare, Square } from 'lucide-react';
 import LayerUpload from '../../components/layers/LayerUpload';
 import { useNavigate } from 'react-router-dom';
@@ -14,7 +14,7 @@ export default function Layers() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['layers'],
-    queryFn: layerService.getLayers,
+    queryFn: () => layerService.getLayers(),
   });
 
   const deleteMutation = useMutation({
@@ -27,7 +27,9 @@ export default function Layers() {
   const handleExport = async (id: number, format: 'shapefile' | 'geojson') => {
     setExportingId(id);
     try {
-      const blob = await layerService.exportLayer(id, format);
+      const blob = format === 'shapefile' 
+        ? await layerService.downloadShapefile(id)
+        : await layerService.downloadGeoJSON(id);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

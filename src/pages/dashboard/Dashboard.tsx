@@ -1,12 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { layerService } from '../../services/layerService';
-import { analysisService } from '../../services/analysisService';
+import { layerService, analysisService } from '../../services';
 import { LayersIcon, BrainCircuitIcon, TrendingUpIcon, MapPinIcon } from 'lucide-react';
 
 export default function Dashboard() {
   const { data: layersData } = useQuery({
     queryKey: ['layers'],
-    queryFn: layerService.getLayers,
+    queryFn: () => layerService.getLayers(),
   });
 
   const { data: analysesData } = useQuery({

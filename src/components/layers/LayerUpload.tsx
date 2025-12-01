@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { layerService } from '../../services/layerService';
+import { layerService } from '../../services';
 import { Upload, X, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface LayerUploadProps {
@@ -184,7 +184,7 @@ export default function LayerUpload({ onClose }: LayerUploadProps) {
           {/* Error */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start space-x-3">
-              <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+              <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-red-800">Error al subir la capa</p>
                 <p className="text-sm text-red-700 mt-1">{error}</p>

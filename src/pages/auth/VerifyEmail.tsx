@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { userService } from '../../services/userService';
+import { userService } from '../../services';
 import { CheckCircle2, XCircle, Loader2, MapIcon } from 'lucide-react';
 
 export default function VerifyEmail() {

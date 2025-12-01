@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { userService } from '../../services/userService';
+import { userService } from '../../services';
 import { MapIcon, Loader2, CheckCircle2 } from 'lucide-react';
 
 export default function Register() {
-  const navigate = useNavigate();
   const [step, setStep] = useState<'form' | 'success'>('form');
   
   const [formData, setFormData] = useState({

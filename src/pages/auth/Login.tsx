@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { authService } from '../../services/authService';
+import { authService } from '../../services';
 import { useAuthStore } from '../../store/useAuthStore';
 import { MapIcon, Loader2 } from 'lucide-react';
 

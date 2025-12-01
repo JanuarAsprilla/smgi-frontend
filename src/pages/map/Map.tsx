@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, GeoJSON, useMap, ZoomControl } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, ZoomControl } from 'react-leaflet';
 import { useQuery } from '@tanstack/react-query';
-import { layerService } from '../../services/layerService';
+import { layerService } from '../../services';
 import { 
   Layers as LayersIcon, 
   Maximize2, 
@@ -58,7 +58,7 @@ export default function Map() {
   // Obtener capas
   const { data: layersResponse } = useQuery({
     queryKey: ['layers'],
-    queryFn: layerService.getLayers,
+    queryFn: () => layerService.getLayers(),
   });
 
   const layers = layersResponse?.results || [];
@@ -93,7 +93,7 @@ export default function Map() {
     );
   };
 
-  const zoomToLayer = (layer: any) => {
+  const zoomToLayer = (_layer: any) => {
     // TODO: Calcular bounds desde los features
     // Por ahora, zoom general a Colombia
     setBounds([
@@ -111,24 +111,9 @@ export default function Map() {
 
   const currentBaseLayer = baseLayers.find(l => l.id === baseLayer) || baseLayers[0];
 
-  const getFeatureStyle = (feature: any) => {
-    return {
-      color: '#3b82f6',
-      weight: 2,
-      opacity: 1,
-      fillOpacity: 0.3,
-      fillColor: '#60a5fa',
-    };
-  };
-
-  const onEachFeature = (feature: any, layer: any) => {
-    if (feature.properties) {
-      const popupContent = Object.entries(feature.properties)
-        .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
-        .join('<br>');
-      layer.bindPopup(popupContent);
-    }
-  };
+  // Funciones de utilidad para GeoJSON (disponibles para uso futuro)
+  // getFeatureStyle: retorna estilo para features
+  // onEachFeature: maneja eventos de features
 
   return (
     <div className="relative h-[calc(100vh-4rem)]">
@@ -220,7 +205,7 @@ export default function Map() {
                       <div className="flex items-center space-x-2 flex-1">
                         <button
                           onClick={() => toggleLayerVisibility(layer.id)}
-                          className="flex-shrink-0"
+                          className="shrink-0"
                         >
                           {layer.visible ? (
                             <Eye className="h-4 w-4 text-blue-600" />
@@ -234,7 +219,7 @@ export default function Map() {
                       </div>
                       <button
                         onClick={() => zoomToLayer(layer)}
-                        className="flex-shrink-0 p-1 hover:bg-gray-100 rounded"
+                        className="shrink-0 p-1 hover:bg-gray-100 rounded"
                         title="Zoom a capa"
                       >
                         <Maximize2 className="h-4 w-4 text-gray-600" />

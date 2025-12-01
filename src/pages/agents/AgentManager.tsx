@@ -17,7 +17,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
-import api from '../../services/api';
+import { agentService } from '../../services';
 
 interface AIProvider {
   id: string;
@@ -54,36 +54,24 @@ export default function AgentManager() {
   // Fetch providers
   const { data: providersData } = useQuery({
     queryKey: ['ai-providers'],
-    queryFn: async () => {
-      const { data } = await api.get('/agents/agents/providers/');
-      return data;
-    },
+    queryFn: () => agentService.getProviders(),
   });
 
   // Fetch prebuilt agents
   const { data: prebuiltData } = useQuery({
     queryKey: ['prebuilt-agents'],
-    queryFn: async () => {
-      const { data } = await api.get('/agents/agents/prebuilt/');
-      return data;
-    },
+    queryFn: () => agentService.getPrebuiltAgents(),
   });
 
   // Fetch user's agents
   const { data: myAgentsData } = useQuery({
     queryKey: ['my-agents'],
-    queryFn: async () => {
-      const { data } = await api.get('/agents/agents/my-agents/');
-      return data;
-    },
+    queryFn: () => agentService.getMyAgents(),
   });
 
   // Configure provider mutation
   const configureProviderMutation = useMutation({
-    mutationFn: async (payload: any) => {
-      const { data } = await api.post('/agents/agents/configure-provider/', payload);
-      return data;
-    },
+    mutationFn: (payload: any) => agentService.configureProvider(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-providers'] });
       setShowProviderConfig(false);
@@ -93,10 +81,7 @@ export default function AgentManager() {
 
   // Test provider mutation
   const testProviderMutation = useMutation({
-    mutationFn: async (payload: any) => {
-      const { data } = await api.post('/agents/agents/test-provider/', payload);
-      return data;
-    },
+    mutationFn: (payload: any) => agentService.testProvider(payload),
     onSuccess: (data) => {
       setTestResult(data);
     },
@@ -107,12 +92,7 @@ export default function AgentManager() {
 
   // Create from prebuilt mutation
   const createFromPrebuiltMutation = useMutation({
-    mutationFn: async (prebuiltId: string) => {
-      const { data } = await api.post('/agents/agents/from-prebuilt/', {
-        prebuilt_id: prebuiltId,
-      });
-      return data;
-    },
+    mutationFn: (prebuiltId: string) => agentService.createFromPrebuilt(prebuiltId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-agents'] });
     },
@@ -566,12 +546,7 @@ function AgentUploadModal({ onClose }: { onClose: () => void }) {
   const [requirements, setRequirements] = useState('');
 
   const uploadMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
-      const { data } = await api.post('/agents/agents/upload/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      return data;
-    },
+    mutationFn: (formData: FormData) => agentService.uploadAgent(formData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-agents'] });
       onClose();

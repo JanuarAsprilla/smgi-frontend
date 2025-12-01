@@ -14,7 +14,7 @@ import {
   UserCheck,
   UserX,
 } from 'lucide-react';
-import api from '../../services/api';
+import { userService } from '../../services';
 
 interface User {
   id: number;
@@ -90,50 +90,36 @@ export default function UserManagementAdvanced() {
   // Fetch users
   const { data: usersData } = useQuery({
     queryKey: ['users'],
-    queryFn: async () => {
-      const { data } = await api.get('/users/users/');
-      return data;
-    },
+    queryFn: () => userService.getUsers(),
   });
 
   // Fetch pending approvals
   const { data: pendingData } = useQuery({
     queryKey: ['pending-approvals'],
-    queryFn: async () => {
-      const { data } = await api.get('/users/users/pending-approvals/');
-      return data;
-    },
+    queryFn: () => userService.getPendingApprovals(),
   });
 
   // Fetch roles
   const { data: rolesData } = useQuery({
     queryKey: ['roles'],
-    queryFn: async () => {
-      const { data } = await api.get('/users/roles/');
-      return data;
-    },
+    queryFn: () => userService.getRoles(),
   });
 
   // Fetch areas
   const { data: areasData } = useQuery({
     queryKey: ['areas'],
-    queryFn: async () => {
-      const { data } = await api.get('/users/areas/');
-      return data;
-    },
+    queryFn: () => userService.getAreas(),
   });
 
   // Approve/Reject mutation
   const approveRejectMutation = useMutation({
-    mutationFn: async ({ userId, action, roleId, areaId, reason }: any) => {
-      const { data } = await api.post(`/users/users/${userId}/approve-reject/`, {
+    mutationFn: ({ userId, action, roleId, areaId, reason }: any) =>
+      userService.approveReject(userId, {
         action,
         role_id: roleId,
         area_id: areaId,
         rejection_reason: reason,
-      });
-      return data;
-    },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
@@ -142,10 +128,8 @@ export default function UserManagementAdvanced() {
 
   // Update user mutation
   const updateUserMutation = useMutation({
-    mutationFn: async ({ userId, data }: { userId: number; data: any }) => {
-      const response = await api.patch(`/users/users/${userId}/`, data);
-      return response.data;
-    },
+    mutationFn: ({ userId, data }: { userId: number; data: any }) =>
+      userService.updateUser(userId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setShowEditModal(false);
@@ -156,11 +140,9 @@ export default function UserManagementAdvanced() {
   const saveRoleMutation = useMutation({
     mutationFn: async (roleData: any) => {
       if (roleData.id) {
-        const { data } = await api.patch(`/users/roles/${roleData.id}/`, roleData);
-        return data;
+        return userService.updateRole(roleData.id, roleData);
       } else {
-        const { data } = await api.post('/users/roles/', roleData);
-        return data;
+        return userService.createRole(roleData);
       }
     },
     onSuccess: () => {
@@ -170,7 +152,7 @@ export default function UserManagementAdvanced() {
   });
 
   const users: User[] = usersData?.results || usersData || [];
-  const pendingUsers: User[] = pendingData || [];
+  const pendingUsers = pendingData || [];
   const roles: Role[] = rolesData?.results || rolesData || [];
   const areas: Area[] = areasData?.results || areasData || [];
 
@@ -521,7 +503,7 @@ function PendingUserCard({
   onReject,
   isLoading,
 }: {
-  user: User;
+  user: any; // PendingUser from backend
   roles: Role[];
   areas: Area[];
   onApprove: (userId: number, roleId: number, areaId?: number) => void;
