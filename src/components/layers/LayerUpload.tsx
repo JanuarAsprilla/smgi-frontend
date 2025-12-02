@@ -871,7 +871,7 @@ export default function LayerUpload({ onClose, onSuccess }: LayerUploadProps) {
         {/* Modal */}
         <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6">
+          <div className="bg-linear-to-r from-blue-600 to-blue-700 p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white/20 rounded-lg">

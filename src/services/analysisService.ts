@@ -1,82 +1,65 @@
-import api from './api';
-import type { Analysis, PaginatedResponse } from '../types';
-import { mockAnalyses } from './mockData';
+/**
+ * Analysis Service - Redirige a agentService
+ * SMGI Frontend
+ * 
+ * REEMPLAZA tu archivo /src/services/analysisService.ts con este
+ * 
+ * NOTA: El módulo de "análisis" realmente usa el sistema de Agentes del backend.
+ * Este servicio es un wrapper para mantener compatibilidad.
+ */
 
-const DEMO_MODE = false;
+import { agentService } from './agentService';
+import type { AgentExecution, PaginatedResponse } from '../types';
 
-// Mock agents para demo
-const mockAgents = [
-  { id: 1, name: 'Gemini Pro', agent_type: 'gemini' as const, model: 'gemini-pro', is_active: true },
-  { id: 2, name: 'GPT-4', agent_type: 'gpt' as const, model: 'gpt-4', is_active: true },
-  { id: 3, name: 'Claude 3', agent_type: 'claude' as const, model: 'claude-3-sonnet', is_active: true },
-];
+export interface CreateAnalysisPayload {
+  agent_id: number;
+  layer_ids?: number[];
+  parameters?: Record<string, any>;
+  name?: string;
+}
 
 export const analysisService = {
-  getAnalyses: async (): Promise<PaginatedResponse<Analysis>> => {
-    if (DEMO_MODE) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      return {
-        count: mockAnalyses.length,
-        results: mockAnalyses,
-      };
-    }
-    const { data } = await api.get<PaginatedResponse<Analysis>>('/agents/analyses/');
-    return data;
+  /**
+   * Get all analyses (executions)
+   * Los "análisis" son en realidad ejecuciones de agentes
+   */
+  getAnalyses: async (): Promise<PaginatedResponse<AgentExecution>> => {
+    return agentService.getExecutions({ ordering: '-created_at' });
   },
 
-  getAnalysis: async (id: number): Promise<Analysis> => {
-    if (DEMO_MODE) {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      const analysis = mockAnalyses.find(a => a.id === id);
-      if (!analysis) throw new Error('Analysis not found');
-      return analysis;
-    }
-    const { data } = await api.get<Analysis>(`/agents/analyses/${id}/`);
-    return data;
+  /**
+   * Get a single analysis (execution)
+   */
+  getAnalysis: async (id: number): Promise<AgentExecution> => {
+    return agentService.getExecution(id);
   },
 
-  getAgents: async (): Promise<PaginatedResponse<any>> => {
-    if (DEMO_MODE) {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      return {
-        count: mockAgents.length,
-        results: mockAgents,
-      };
-    }
-    const { data } = await api.get('/agents/agents/');
-    return data;
+  /**
+   * Create analysis = Execute an agent
+   */
+  createAnalysis: async (payload: CreateAnalysisPayload): Promise<AgentExecution> => {
+    return agentService.executeAgent(payload.agent_id, {
+      parameters: {
+        ...payload.parameters,
+        input_layers: payload.layer_ids,
+        name: payload.name,
+      },
+    });
   },
 
-  createAnalysis: async (payload: {
-    agent_id: number;
-    layer_id: number;
-    analysis_type: string;
-    prompt?: string;
-  }): Promise<Analysis> => {
-    if (DEMO_MODE) {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const newAnalysis: Analysis = {
-        id: Math.max(...mockAnalyses.map(a => a.id)) + 1,
-        layer: payload.layer_id,
-        status: 'running',
-        analysis_type: payload.analysis_type,
-        started_at: new Date().toISOString(),
-      };
-      mockAnalyses.unshift(newAnalysis);
-      
-      // Simular que se completa después de 3 segundos
-      setTimeout(() => {
-        newAnalysis.status = 'completed';
-        newAnalysis.completed_at = new Date().toISOString();
-        newAnalysis.result = {
-          summary: 'Análisis completado exitosamente',
-          insights: ['Patrón detectado en zona norte', 'Densidad alta en área central'],
-        };
-      }, 3000);
-      
-      return newAnalysis;
-    }
-    const { data } = await api.post<Analysis>('/agents/analyze/', payload);
-    return data;
+  /**
+   * Cancel a running analysis
+   */
+  cancelAnalysis: async (id: number): Promise<AgentExecution> => {
+    return agentService.cancelExecution(id);
+  },
+
+  /**
+   * Retry a failed analysis
+   */
+  retryAnalysis: async (id: number): Promise<AgentExecution> => {
+    return agentService.retryExecution(id);
   },
 };
+
+export default analysisService;
