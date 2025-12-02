@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from './store/useAuthStore';
+import { ToastProvider } from './components/ui/Toast';  // ← AGREGAR ESTE IMPORT
 
 import MainLayout from './components/layout/MainLayout';
 import Login from './pages/auth/Login';
@@ -13,6 +14,7 @@ import Analysis from './pages/analysis/Analysis';
 import Monitoring from './pages/monitoring/Monitoring';
 import AgentManager from './pages/agents/AgentManager';
 import UserManagement from './pages/admin/UserManagement';
+import Alerts from './pages/alerts/Alerts';
 import Map from './pages/map/Map';
 import DataViewer from './pages/data/DataViewer';
 import NotificationSettings from './pages/settings/NotificationSettings';
@@ -34,37 +36,40 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          {/* ✅ RUTAS PÚBLICAS (SIN AUTENTICACIÓN) */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
+      <ToastProvider>  {/* ← AGREGAR AQUÍ */}
+        <BrowserRouter>
+          <Routes>
+            {/* ✅ RUTAS PÚBLICAS (SIN AUTENTICACIÓN) */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
 
-          {/* ✅ RUTAS PRIVADAS (REQUIEREN LOGIN) */}
-          <Route
-            path="/"
-            element={
-              <PrivateRoute>
-                <MainLayout />
-              </PrivateRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="layers" element={<Layers />} />
-            <Route path="processes" element={<Processes />} />
-            <Route path="analysis" element={<Analysis />} />
-            <Route path="agents" element={<AgentManager />} />
-            <Route path="monitoring" element={<Monitoring />} />
-            <Route path="admin/users" element={<UserManagement />} />
-            <Route path="map" element={<Map />} />
-            <Route path="data" element={<DataViewer />} />
-            <Route path="settings/notifications" element={<NotificationSettings />} />
-          </Route>
+            {/* ✅ RUTAS PRIVADAS (REQUIEREN LOGIN) */}
+            <Route
+              path="/"
+              element={
+                <PrivateRoute>
+                  <MainLayout />
+                </PrivateRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="layers" element={<Layers />} />
+              <Route path="processes" element={<Processes />} />
+              <Route path="analysis" element={<Analysis />} />
+              <Route path="agents" element={<AgentManager />} />
+              <Route path="monitoring" element={<Monitoring />} />
+              <Route path="admin/users" element={<UserManagement />} />
+              <Route path="map" element={<Map />} />
+              <Route path="data" element={<DataViewer />} />
+              <Route path="settings/notifications" element={<NotificationSettings />} />
+              <Route path="alerts" element={<Alerts />} />
+            </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </ToastProvider>  {/* ← CERRAR AQUÍ */}
     </QueryClientProvider>
   );
 }

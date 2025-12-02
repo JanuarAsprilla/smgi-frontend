@@ -7,17 +7,34 @@ import type {
   PaginatedResponse 
 } from '../types';
 
+// ============================================================================
+// Types & Interfaces
+// ============================================================================
+
+export type AlertSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type AlertStatus = 'pending' | 'sent' | 'acknowledged' | 'resolved' | 'failed';
+export type AlertRuleType = 'threshold' | 'pattern' | 'anomaly' | 'schedule';
+
 export interface AlertFilters {
-  status?: 'pending' | 'sent' | 'acknowledged' | 'resolved' | 'failed';
-  severity?: 'low' | 'medium' | 'high' | 'critical';
+  status?: AlertStatus;
+  severity?: AlertSeverity;
   rule?: number;
+  search?: string;
+  created_at__gte?: string;
+  created_at__lte?: string;
   ordering?: string;
+  page?: number;
+  page_size?: number;
 }
 
 export interface AlertRuleFilters {
-  rule_type?: 'threshold' | 'pattern' | 'anomaly' | 'schedule';
+  rule_type?: AlertRuleType;
   is_active?: boolean;
+  severity?: AlertSeverity;
+  search?: string;
   ordering?: string;
+  page?: number;
+  page_size?: number;
 }
 
 export interface CreateAlertChannelPayload {
@@ -31,11 +48,28 @@ export interface CreateAlertChannelPayload {
 export interface CreateAlertRulePayload {
   name: string;
   description?: string;
-  rule_type: 'threshold' | 'pattern' | 'anomaly' | 'schedule';
+  rule_type: AlertRuleType;
   conditions: Record<string, any>;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  severity: AlertSeverity;
   channels: number[];
+  cooldown_minutes?: number;
   is_active?: boolean;
+}
+
+export interface AlertStatistics {
+  total_alerts: number;
+  active_alerts: number;
+  acknowledged_alerts: number;
+  resolved_alerts: number;
+  critical_alerts: number;
+  high_alerts: number;
+  medium_alerts: number;
+  low_alerts: number;
+  alerts_today: number;
+  alerts_this_week: number;
+  alerts_this_month: number;
+  by_severity: Record<string, number>;
+  by_status: Record<string, number>;
 }
 
 export interface CreateAlertSubscriptionPayload {
@@ -45,6 +79,10 @@ export interface CreateAlertSubscriptionPayload {
   severity_filter?: string[];
   is_active?: boolean;
 }
+
+// ============================================================================
+// Alert Service
+// ============================================================================
 
 export const alertService = {
   // ============================================================================
@@ -73,9 +111,10 @@ export const alertService = {
   /**
    * Acknowledge an alert
    */
-  acknowledgeAlert: async (id: number): Promise<Alert> => {
+  acknowledgeAlert: async (id: number, notes?: string): Promise<Alert> => {
     const { data } = await api.post<Alert>(
-      API_ENDPOINTS.ALERTS.ACKNOWLEDGE(id)
+      API_ENDPOINTS.ALERTS.ACKNOWLEDGE(id),
+      { notes }
     );
     return data;
   },
@@ -83,10 +122,10 @@ export const alertService = {
   /**
    * Resolve an alert
    */
-  resolveAlert: async (id: number, resolution_notes?: string): Promise<Alert> => {
+  resolveAlert: async (id: number, payload?: { resolution_notes?: string }): Promise<Alert> => {
     const { data } = await api.post<Alert>(
       API_ENDPOINTS.ALERTS.RESOLVE(id),
-      { resolution_notes }
+      payload
     );
     return data;
   },
@@ -95,11 +134,41 @@ export const alertService = {
    * Get alert dashboard statistics
    */
   getDashboard: async (): Promise<{
-    statistics: any;
+    statistics: AlertStatistics;
     recent_alerts: Alert[];
   }> => {
     const { data } = await api.get(API_ENDPOINTS.ALERTS.DASHBOARD);
     return data;
+  },
+
+  /**
+   * Get alert statistics
+   */
+  getStatistics: async (): Promise<AlertStatistics> => {
+    const { data } = await api.get(API_ENDPOINTS.ALERTS.STATISTICS);
+    return data;
+  },
+
+  /**
+   * Get active alerts count
+   */
+  getActiveCount: async (): Promise<{ count: number }> => {
+    const { data } = await api.get<PaginatedResponse<Alert>>(
+      API_ENDPOINTS.ALERTS.LIST,
+      { params: { status: 'pending', page_size: 1 } }
+    );
+    return { count: data.count };
+  },
+
+  /**
+   * Get critical alerts
+   */
+  getCriticalAlerts: async (): Promise<Alert[]> => {
+    const { data } = await api.get<PaginatedResponse<Alert>>(
+      API_ENDPOINTS.ALERTS.LIST,
+      { params: { severity: 'critical', status: 'pending', ordering: '-created_at' } }
+    );
+    return data.results;
   },
 
   // ============================================================================
@@ -140,7 +209,7 @@ export const alertService = {
    * Update an alert rule
    */
   updateRule: async (id: number, payload: Partial<CreateAlertRulePayload>): Promise<AlertRule> => {
-    const { data } = await api.put<AlertRule>(
+    const { data } = await api.patch<AlertRule>(
       `${API_ENDPOINTS.ALERTS.RULES}${id}/`,
       payload
     );
@@ -152,6 +221,23 @@ export const alertService = {
    */
   deleteRule: async (id: number): Promise<void> => {
     await api.delete(`${API_ENDPOINTS.ALERTS.RULES}${id}/`);
+  },
+
+  /**
+   * Toggle alert rule status
+   */
+  toggleRuleStatus: async (id: number, isActive: boolean): Promise<AlertRule> => {
+    if (isActive) {
+      const { data } = await api.post<AlertRule>(
+        `${API_ENDPOINTS.ALERTS.RULES}${id}/enable/`
+      );
+      return data;
+    } else {
+      const { data } = await api.post<AlertRule>(
+        `${API_ENDPOINTS.ALERTS.RULES}${id}/disable/`
+      );
+      return data;
+    }
   },
 
   /**
@@ -326,14 +412,28 @@ export const alertService = {
   },
 
   // ============================================================================
-  // Statistics
+  // Bulk Operations
   // ============================================================================
 
   /**
-   * Get alert statistics
+   * Acknowledge multiple alerts
    */
-  getStatistics: async (): Promise<any> => {
-    const { data } = await api.get(API_ENDPOINTS.ALERTS.STATISTICS);
-    return data;
+  bulkAcknowledge: async (ids: number[]): Promise<{ acknowledged: number }> => {
+    const results = await Promise.all(
+      ids.map(id => alertService.acknowledgeAlert(id))
+    );
+    return { acknowledged: results.length };
+  },
+
+  /**
+   * Resolve multiple alerts
+   */
+  bulkResolve: async (ids: number[], notes?: string): Promise<{ resolved: number }> => {
+    const results = await Promise.all(
+      ids.map(id => alertService.resolveAlert(id, { resolution_notes: notes }))
+    );
+    return { resolved: results.length };
   },
 };
+
+export default alertService;

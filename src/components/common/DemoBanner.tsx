@@ -1,4 +1,4 @@
-export default function DemoBanner() {
+/*export default function DemoBanner() {
   return (
     <div className="bg-yellow-50 border-b border-yellow-200">
       <div className="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8">
@@ -9,4 +9,4 @@ export default function DemoBanner() {
       </div>
     </div>
   );
-}
+}*/

@@ -1,6 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
-import { MapIcon, LayersIcon, BrainCircuitIcon, BellIcon, LayoutDashboardIcon, LogOutIcon, PlayCircle } from 'lucide-react';
+import { MapIcon, LayersIcon, BrainCircuitIcon, BellIcon, LayoutDashboardIcon, LogOutIcon, PlayCircle, AlertTriangleIcon } from 'lucide-react';
 
 // Banner de modo demo inline
 function DemoBanner() {
@@ -32,6 +32,7 @@ export default function MainLayout() {
     { name: 'Procesos', href: '/processes', icon: PlayCircle },
     { name: 'Análisis', href: '/analysis', icon: BrainCircuitIcon },
     { name: 'Monitoreo', href: '/monitoring', icon: BellIcon },
+    { name: 'Alertas', href: '/alerts', icon: AlertTriangleIcon },
   ];
 
   return (

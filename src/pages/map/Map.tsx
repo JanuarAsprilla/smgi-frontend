@@ -151,7 +151,7 @@ export default function Map() {
       >
         <div className="h-full flex flex-col">
           {/* Header */}
-          <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-purple-50">
+          <div className="p-4 border-b bg-linear-to-r from-blue-50 to-purple-50">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-bold text-gray-900 flex items-center">
                 <LayersIcon className="h-5 w-5 mr-2 text-blue-600" />

@@ -24,17 +24,36 @@ export const API_ENDPOINTS = {
   
   // Geodata
   GEODATA: {
-    DATASOURCES: '/geodata/datasources/',
+  // Layers
     LAYERS: '/geodata/layers/',
     LAYER_DETAIL: (id: number) => `/geodata/layers/${id}/`,
     LAYER_UPLOAD: '/geodata/layers/upload/',
     LAYER_EXPORT: (id: number) => `/geodata/layers/${id}/export/`,
     LAYER_DOWNLOAD_SHP: (id: number) => `/geodata/layers/${id}/download/shapefile/`,
     LAYER_DOWNLOAD_GEOJSON: (id: number) => `/geodata/layers/${id}/download/geojson/`,
+    
+    // NEW: Layer from external sources
+    LAYER_FROM_URL: '/geodata/layers/from-url/',
+    LAYER_FROM_ARCGIS: '/geodata/layers/from-arcgis/',
+    LAYER_FROM_DATABASE: '/geodata/layers/from-database/',
+    
+    // Features
     FEATURES: '/geodata/features/',
+    FEATURE_DETAIL: (id: number) => `/geodata/features/${id}/`,
+    
+    // Datasets
     DATASETS: '/geodata/datasets/',
+    DATASET_DETAIL: (id: number) => `/geodata/datasets/${id}/`,
     DATASET_EXPORT: (id: number) => `/geodata/datasets/${id}/export/`,
-    SYNC_LOGS: '/geodata/synclogs/',
+    DATASET_DOWNLOAD: (id: number, format: string) => `/geodata/datasets/${id}/download/${format}/`,
+    
+    // Data Sources (NUEVO)
+    DATASOURCES: '/geodata/datasources/',
+    DATASOURCE_DETAIL: (id: number) => `/geodata/datasources/${id}/`,
+    DATASOURCE_SYNC: (id: number) => `/geodata/datasources/${id}/sync/`,
+    
+    // Sync Logs
+    SYNC_LOGS: '/geodata/sync-logs/',
   },
   
   // Agents
@@ -95,6 +114,7 @@ export const API_ENDPOINTS = {
     RESOLVE: (id: number) => `/alerts/alerts/${id}/resolve/`,
     DASHBOARD: '/alerts/alerts/dashboard/',
     RULES: '/alerts/rules/',
+    RULE_DETAIL: (id: number) => `/alerts/rules/${id}/`, 
     CHANNELS: '/alerts/channels/',
     SUBSCRIPTIONS: '/alerts/subscriptions/',
     TEMPLATES: '/alerts/templates/',
@@ -125,4 +145,6 @@ export const API_ENDPOINTS = {
     UNREAD_COUNT: '/notifications/unread-count/',
     PREFERENCES: '/notifications/preferences/',
   },
+
+  
 };
