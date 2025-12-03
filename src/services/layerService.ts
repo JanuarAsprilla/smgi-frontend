@@ -287,6 +287,27 @@ export const layerService = {
     return data;
   },
 
+    /**
+   * Get GeoJSON data for a layer (for visualization and analysis)
+   */
+  getLayerGeoJSON: async (id: number): Promise<any> => {
+    try {
+      // Intenta el endpoint de GeoJSON específico
+      const { data } = await api.get(`/geodata/layers/${id}/geojson/`);
+      return data;
+    } catch (error) {
+      // Fallback: intenta el endpoint de descarga
+      try {
+        const { data } = await api.get(`/geodata/layers/${id}/download/geojson/`);
+        return data;
+      } catch {
+        // Último intento: obtener detalles de la capa
+        const { data } = await api.get(`/geodata/layers/${id}/`);
+        return data;
+      }
+    }
+  },
+
   /**
    * Download layer as Shapefile (direct download)
    */
@@ -333,22 +354,10 @@ export const layerService = {
   },
 
   /**
-   * Get layer as GeoJSON for map visualization
+   * Get layer statistics (feature count, bounds, attributes, etc.)
    */
-  getLayerGeoJSON: async (id: number): Promise<any> => {
-    const { data } = await api.get(
-      `${API_ENDPOINTS.GEODATA.LAYER_DETAIL(id)}geojson/`
-    );
-    return data;
-  },
-
-  /**
-   * Get layer statistics
-   */
-  getLayerStatistics: async (id: number): Promise<any> => {
-    const { data } = await api.get(
-      `${API_ENDPOINTS.GEODATA.LAYER_DETAIL(id)}statistics/`
-    );
+  getLayerStats: async (id: number): Promise<any> => {
+    const { data } = await api.get(`/geodata/layers/${id}/stats/`);
     return data;
   },
 

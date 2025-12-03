@@ -1,14 +1,11 @@
 /**
- * Analysis Page - Análisis con Agentes de IA
- * SMGI Frontend - Versión 2.0
+ * Analysis Page - Análisis con IA Completo
+ * SMGI Frontend - Versión 3.1 FUNCIONAL
  * 
- * Incluye:
- * - Agentes predeterminados (templates)
- * - Subir archivo .py
- * - Mis agentes personalizados
- * - Historial de ejecuciones
- * 
- * REEMPLAZA tu archivo /src/pages/analysis/Analysis.tsx con este
+ * 3 TIPOS DE ANÁLISIS:
+ * 1. Agentes Predeterminados - EJECUTAN EN FRONTEND (funcional)
+ * 2. Agentes Personalizados - Código Python (backend)
+ * 3. Análisis con LLM - Groq/Gemini GRATIS (funcional)
  */
 
 import { useState, useRef } from 'react';
@@ -20,69 +17,57 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
-  Clock,
   Play,
   Eye,
-  Search,
   RefreshCw,
-  Layers,
   Code,
   Upload,
   Sparkles,
   AlertTriangle,
   X,
   FileCode,
-  Zap,
   History,
   PlusCircle,
-  Download,
-  Star,
-  TrendingUp,
   BarChart3,
   MapPin,
   Ruler,
   GitCompare,
   Shield,
   FileText,
-  Calculator,
   Filter,
-  Database,
-  Globe,
-  Cpu,
-  Package,
-  ChevronRight,
-  Copy,
+  Send,
+  Bot,
+  Key,
   Check,
+  Copy,
+  ExternalLink,
+  Wand2,
+  TrendingUp,
+  PieChart,
 } from 'lucide-react';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface Agent {
+interface Layer {
   id: number;
   name: string;
   description?: string;
-  agent_type: string;
-  category?: { id: number; name: string };
-  status: string;
-  is_public: boolean;
-  rating?: number;
-  execution_count?: number;
-  created_at: string;
-  code?: string;
+  geometry_type?: string;
+  feature_count?: number;
+  srid?: number;
 }
 
-interface AgentTemplate {
-  id: number;
-  name: string;
-  description?: string;
-  agent_type: string;
-  category?: { id: number; name: string };
-  code_template: string;
-  parameters_schema?: Record<string, any>;
-  usage_count: number;
-  is_featured: boolean;
+interface GeoJSONFeature {
+  type: 'Feature';
+  geometry: any;
+  properties: Record<string, any>;
+}
+
+interface GeoJSONCollection {
+  type: 'FeatureCollection';
+  features: GeoJSONFeature[];
 }
 
 interface Execution {
@@ -100,793 +85,919 @@ interface Execution {
   created_at: string;
 }
 
+interface LocalAnalysisResult {
+  id: string;
+  name: string;
+  layerName: string;
+  type: string;
+  status: 'running' | 'completed' | 'failed';
+  result?: any;
+  error?: string;
+  timestamp: Date;
+}
+
 // ============================================================================
-// Agentes Predeterminados del Sistema (Frontend fallback)
+// Funciones de Geometría (para análisis en frontend)
 // ============================================================================
 
-const BUILTIN_AGENTS = [
+function calculateArea(geometry: any): number {
+  if (!geometry) return 0;
+  const type = geometry.type;
+  const coords = geometry.coordinates;
+
+  if (type === 'Polygon') return Math.abs(polygonArea(coords[0]));
+  if (type === 'MultiPolygon') {
+    return coords.reduce((sum: number, poly: any) => sum + Math.abs(polygonArea(poly[0])), 0);
+  }
+  return 0;
+}
+
+function polygonArea(ring: number[][]): number {
+  if (!ring || ring.length < 3) return 0;
+  let area = 0;
+  const n = ring.length;
+  for (let i = 0; i < n - 1; i++) {
+    const j = (i + 1) % n;
+    // Conversión aproximada a metros cuadrados
+    const x1 = ring[i][0] * 111320 * Math.cos((ring[i][1] * Math.PI) / 180);
+    const y1 = ring[i][1] * 110540;
+    const x2 = ring[j][0] * 111320 * Math.cos((ring[j][1] * Math.PI) / 180);
+    const y2 = ring[j][1] * 110540;
+    area += x1 * y2 - x2 * y1;
+  }
+  return Math.abs(area / 2);
+}
+
+function calculatePerimeter(geometry: any): number {
+  if (!geometry) return 0;
+  const type = geometry.type;
+  const coords = geometry.coordinates;
+
+  if (type === 'Polygon') return ringPerimeter(coords[0]);
+  if (type === 'MultiPolygon') {
+    return coords.reduce((sum: number, poly: any) => sum + ringPerimeter(poly[0]), 0);
+  }
+  if (type === 'LineString') return lineLength(coords);
+  return 0;
+}
+
+function ringPerimeter(ring: number[][]): number {
+  if (!ring) return 0;
+  let perimeter = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    perimeter += haversineDistance(ring[i], ring[i + 1]);
+  }
+  return perimeter;
+}
+
+function lineLength(coords: number[][]): number {
+  if (!coords) return 0;
+  let length = 0;
+  for (let i = 0; i < coords.length - 1; i++) {
+    length += haversineDistance(coords[i], coords[i + 1]);
+  }
+  return length;
+}
+
+function haversineDistance(coord1: number[], coord2: number[]): number {
+  const R = 6371000; // Radio de la Tierra en metros
+  const lat1 = (coord1[1] * Math.PI) / 180;
+  const lat2 = (coord2[1] * Math.PI) / 180;
+  const deltaLat = ((coord2[1] - coord1[1]) * Math.PI) / 180;
+  const deltaLon = ((coord2[0] - coord1[0]) * Math.PI) / 180;
+  const a = Math.sin(deltaLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function calculateCentroid(geometry: any): { x: number; y: number } | null {
+  if (!geometry) return null;
+  const type = geometry.type;
+  const coords = geometry.coordinates;
+
+  if (type === 'Point') return { x: coords[0], y: coords[1] };
+  if (type === 'Polygon' && coords[0]) {
+    const ring = coords[0];
+    const n = ring.length - 1;
+    if (n < 1) return null;
+    let sumX = 0, sumY = 0;
+    for (let i = 0; i < n; i++) {
+      sumX += ring[i][0];
+      sumY += ring[i][1];
+    }
+    return { x: sumX / n, y: sumY / n };
+  }
+  if (type === 'MultiPolygon') {
+    const centroids = coords.map((poly: any) => {
+      if (!poly[0]) return null;
+      const ring = poly[0];
+      const n = ring.length - 1;
+      if (n < 1) return null;
+      let sumX = 0, sumY = 0;
+      for (let i = 0; i < n; i++) {
+        sumX += ring[i][0];
+        sumY += ring[i][1];
+      }
+      return { x: sumX / n, y: sumY / n };
+    }).filter(Boolean);
+    if (centroids.length === 0) return null;
+    return {
+      x: centroids.reduce((sum: number, c: any) => sum + c.x, 0) / centroids.length,
+      y: centroids.reduce((sum: number, c: any) => sum + c.y, 0) / centroids.length,
+    };
+  }
+  return null;
+}
+
+function isValidGeometry(geometry: any): boolean {
+  if (!geometry || !geometry.type || !geometry.coordinates) return false;
+  try {
+    const coords = geometry.coordinates;
+    if (geometry.type === 'Point') return coords.length >= 2;
+    if (geometry.type === 'Polygon') return coords[0]?.length >= 4;
+    if (geometry.type === 'MultiPolygon') return coords.every((p: any) => p[0]?.length >= 4);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ============================================================================
+// Análisis Predeterminados (Ejecutados en Frontend)
+// ============================================================================
+
+interface BuiltinAnalysis {
+  id: string;
+  name: string;
+  description: string;
+  icon: any;
+  color: string;
+  execute: (geojson: GeoJSONCollection, layer: Layer) => any;
+}
+
+const BUILTIN_ANALYSES: BuiltinAnalysis[] = [
   {
     id: 'stats',
-    name: 'Análisis Estadístico',
-    description: 'Calcula estadísticas completas: área total, perímetro, centroide, distribución de valores.',
+    name: 'Estadísticas Completas',
+    description: 'Calcula área, perímetro, conteo y estadísticas de atributos numéricos.',
     icon: BarChart3,
-    color: 'bg-blue-500',
-    agent_type: 'statistics',
-    code: `import logging
-import json
-logger = logging.getLogger(__name__)
+    color: 'from-blue-500 to-cyan-500',
+    execute: (geojson, layer) => {
+      const features = geojson.features || [];
+      const count = features.length;
 
-if not input_layers:
-    raise ValueError("Se requiere al menos una capa de entrada")
+      if (count === 0) return { error: 'No hay features para analizar' };
 
-layer = input_layers[0]
-features = layer.features.filter(is_active=True)
+      let totalArea = 0;
+      let totalPerimeter = 0;
+      const areas: number[] = [];
 
-# Estadísticas básicas
-total_features = features.count()
-total_area = 0
-total_perimeter = 0
+      features.forEach((f) => {
+        if (f.geometry) {
+          const area = calculateArea(f.geometry);
+          const perimeter = calculatePerimeter(f.geometry);
+          areas.push(area);
+          totalArea += area;
+          totalPerimeter += perimeter;
+        }
+      });
 
-for feature in features:
-    if feature.geometry:
-        if hasattr(feature.geometry, 'area'):
-            total_area += feature.geometry.area
-        if hasattr(feature.geometry, 'length'):
-            total_perimeter += feature.geometry.length
+      // Estadísticas de atributos numéricos
+      const numericStats: Record<string, any> = {};
+      const sampleProps = features[0]?.properties || {};
 
-# Análisis de atributos
-attribute_stats = {}
-if total_features > 0:
-    sample = features.first()
-    if sample and sample.properties:
-        for key, value in sample.properties.items():
-            if isinstance(value, (int, float)):
-                values = [f.properties.get(key, 0) for f in features if f.properties]
-                numeric_values = [v for v in values if isinstance(v, (int, float))]
-                if numeric_values:
-                    attribute_stats[key] = {
-                        'min': min(numeric_values),
-                        'max': max(numeric_values),
-                        'avg': sum(numeric_values) / len(numeric_values),
-                        'sum': sum(numeric_values)
-                    }
+      Object.keys(sampleProps).forEach((key) => {
+        const values = features
+          .map((f) => f.properties?.[key])
+          .filter((v) => typeof v === 'number') as number[];
 
-output_data['layer_name'] = layer.name
-output_data['geometry_type'] = layer.geometry_type
-output_data['total_features'] = total_features
-output_data['total_area_m2'] = round(total_area, 2)
-output_data['total_area_ha'] = round(total_area / 10000, 2)
-output_data['total_area_km2'] = round(total_area / 1000000, 4)
-output_data['total_perimeter_m'] = round(total_perimeter, 2)
-output_data['attribute_statistics'] = attribute_stats
+        if (values.length > 0) {
+          numericStats[key] = {
+            count: values.length,
+            sum: Math.round(values.reduce((a, b) => a + b, 0) * 100) / 100,
+            min: Math.round(Math.min(...values) * 100) / 100,
+            max: Math.round(Math.max(...values) * 100) / 100,
+            avg: Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100) / 100,
+          };
+        }
+      });
 
-logger.info(f"Análisis completado: {total_features} features, {total_area:.2f} m²")
-`,
+      // Tipos de geometría
+      const geoTypes: Record<string, number> = {};
+      features.forEach((f) => {
+        const type = f.geometry?.type || 'null';
+        geoTypes[type] = (geoTypes[type] || 0) + 1;
+      });
+
+      return {
+        '📊 Resumen General': {
+          capa: layer.name,
+          total_features: count,
+          tipo_geometria: layer.geometry_type,
+          srid: layer.srid,
+        },
+        '📐 Estadísticas Espaciales': {
+          area_total_m2: Math.round(totalArea * 100) / 100,
+          area_total_ha: Math.round((totalArea / 10000) * 100) / 100,
+          area_total_km2: Math.round((totalArea / 1000000) * 1000) / 1000,
+          perimetro_total_m: Math.round(totalPerimeter * 100) / 100,
+          perimetro_total_km: Math.round((totalPerimeter / 1000) * 100) / 100,
+        },
+        '📏 Áreas por Feature': {
+          minima_ha: areas.length > 0 ? Math.round((Math.min(...areas) / 10000) * 100) / 100 : 0,
+          maxima_ha: areas.length > 0 ? Math.round((Math.max(...areas) / 10000) * 100) / 100 : 0,
+          promedio_ha: areas.length > 0 ? Math.round((totalArea / count / 10000) * 100) / 100 : 0,
+        },
+        '🔢 Atributos Numéricos': Object.keys(numericStats).length > 0 ? numericStats : 'Sin atributos numéricos',
+        '🗺️ Tipos de Geometría': geoTypes,
+      };
+    },
   },
   {
     id: 'validator',
-    name: 'Validador de Datos',
-    description: 'Detecta geometrías inválidas, atributos faltantes, duplicados y problemas de calidad.',
+    name: 'Validador de Calidad',
+    description: 'Detecta geometrías inválidas, datos faltantes y genera score de calidad.',
     icon: Shield,
-    color: 'bg-green-500',
-    agent_type: 'validation',
-    code: `import logging
-logger = logging.getLogger(__name__)
+    color: 'from-green-500 to-emerald-500',
+    execute: (geojson, _layer) => {
+      const features = geojson.features || [];
+      const issues: any[] = [];
+      let validGeometries = 0;
+      let invalidGeometries = 0;
+      let nullGeometries = 0;
+      let emptyProperties = 0;
 
-if not input_layers:
-    raise ValueError("Se requiere al menos una capa de entrada")
+      features.forEach((f, idx) => {
+        if (!f.geometry) {
+          nullGeometries++;
+          if (issues.length < 20) issues.push({ feature: idx, tipo: '❌ Sin geometría' });
+        } else if (!isValidGeometry(f.geometry)) {
+          invalidGeometries++;
+          if (issues.length < 20) issues.push({ feature: idx, tipo: '⚠️ Geometría inválida' });
+        } else {
+          validGeometries++;
+        }
 
-layer = input_layers[0]
-features = layer.features.filter(is_active=True)
+        if (!f.properties || Object.keys(f.properties).length === 0) {
+          emptyProperties++;
+        }
+      });
 
-issues = []
-valid_count = 0
-invalid_geometries = 0
-null_geometries = 0
-empty_properties = 0
+      const total = features.length;
+      const qualityScore = total > 0 ? Math.round((validGeometries / total) * 100) : 0;
 
-for feature in features:
-    feature_issues = []
-    
-    # Validar geometría
-    if feature.geometry is None:
-        null_geometries += 1
-        feature_issues.append("Geometría nula")
-    elif not feature.geometry.valid:
-        invalid_geometries += 1
-        feature_issues.append(f"Geometría inválida: {feature.geometry.valid_reason}")
-    
-    # Validar propiedades
-    if not feature.properties or len(feature.properties) == 0:
-        empty_properties += 1
-        feature_issues.append("Sin propiedades/atributos")
-    
-    if feature_issues:
-        issues.append({
-            'feature_id': feature.id,
-            'issues': feature_issues
-        })
-    else:
-        valid_count += 1
+      let qualityLevel = '🟢 Excelente';
+      if (qualityScore < 50) qualityLevel = '🔴 Bajo';
+      else if (qualityScore < 75) qualityLevel = '🟡 Regular';
+      else if (qualityScore < 90) qualityLevel = '🟢 Bueno';
 
-output_data['layer_name'] = layer.name
-output_data['total_features'] = features.count()
-output_data['valid_features'] = valid_count
-output_data['invalid_geometries'] = invalid_geometries
-output_data['null_geometries'] = null_geometries
-output_data['empty_properties'] = empty_properties
-output_data['issues'] = issues[:50]  # Primeros 50 problemas
-output_data['quality_score'] = round((valid_count / features.count()) * 100, 2) if features.count() > 0 else 0
+      const recommendations: string[] = [];
+      if (nullGeometries > 0) recommendations.push(`• Revisar ${nullGeometries} features sin geometría`);
+      if (invalidGeometries > 0) recommendations.push(`• Reparar ${invalidGeometries} geometrías inválidas`);
+      if (emptyProperties > 0) recommendations.push(`• Completar atributos en ${emptyProperties} features`);
+      if (recommendations.length === 0) recommendations.push('✅ La capa tiene excelente calidad');
 
-logger.info(f"Validación completada: {valid_count}/{features.count()} válidos ({output_data['quality_score']}%)")
-`,
+      return {
+        '📈 Score de Calidad': `${qualityScore}%`,
+        '🏆 Nivel': qualityLevel,
+        '📋 Resumen': {
+          total_features: total,
+          geometrias_validas: validGeometries,
+          geometrias_invalidas: invalidGeometries,
+          geometrias_nulas: nullGeometries,
+          features_sin_atributos: emptyProperties,
+        },
+        '⚠️ Problemas Detectados': issues.length > 0 ? issues : 'Sin problemas',
+        '💡 Recomendaciones': recommendations,
+      };
+    },
   },
   {
     id: 'coverage',
     name: 'Análisis de Cobertura',
-    description: 'Calcula distribución de tipos, porcentajes de cobertura y genera resumen por categoría.',
-    icon: Globe,
-    color: 'bg-purple-500',
-    agent_type: 'analysis',
-    code: `import logging
-from collections import defaultdict
-logger = logging.getLogger(__name__)
+    description: 'Distribución por tipo/categoría con porcentajes y áreas.',
+    icon: PieChart,
+    color: 'from-purple-500 to-pink-500',
+    execute: (geojson, _layer) => {
+      const features = geojson.features || [];
+      
+      // Detectar campo de clasificación
+      const sampleProps = features[0]?.properties || {};
+      const candidates = ['tipo', 'type', 'clase', 'class', 'category', 'categoria', 'cobertura', 'uso', 'land_use', 'clasificacion', 'name', 'nombre'];
+      let classField = null;
+      
+      for (const field of candidates) {
+        if (sampleProps[field] !== undefined) {
+          classField = field;
+          break;
+        }
+      }
 
-if not input_layers:
-    raise ValueError("Se requiere al menos una capa de entrada")
+      if (!classField) {
+        // Buscar cualquier campo string con valores repetidos
+        for (const [key, value] of Object.entries(sampleProps)) {
+          if (typeof value === 'string') {
+            classField = key;
+            break;
+          }
+        }
+      }
 
-layer = input_layers[0]
-features = layer.features.filter(is_active=True)
+      if (!classField) {
+        return {
+          '❌ Error': 'No se encontró campo de clasificación',
+          '📋 Campos Disponibles': Object.keys(sampleProps),
+        };
+      }
 
-# Parámetro: campo de clasificación
-class_field = parameters.get('class_field', 'tipo')
+      const coverage: Record<string, { count: number; area: number }> = {};
 
-# Calcular cobertura por tipo
-coverage_by_type = defaultdict(lambda: {'count': 0, 'area': 0})
-total_area = 0
+      features.forEach((f) => {
+        const value = String(f.properties?.[classField] || 'Sin clasificar');
+        const area = calculateArea(f.geometry);
 
-for feature in features:
-    area = feature.geometry.area if feature.geometry else 0
-    total_area += area
-    
-    # Obtener tipo/clase del feature
-    tipo = 'Sin clasificar'
-    if feature.properties:
-        tipo = feature.properties.get(class_field, 
-               feature.properties.get('clase',
-               feature.properties.get('category',
-               feature.properties.get('type', 'Sin clasificar'))))
-    
-    coverage_by_type[str(tipo)]['count'] += 1
-    coverage_by_type[str(tipo)]['area'] += area
+        if (!coverage[value]) coverage[value] = { count: 0, area: 0 };
+        coverage[value].count++;
+        coverage[value].area += area;
+      });
 
-# Calcular porcentajes
-coverage_summary = []
-for tipo, data in sorted(coverage_by_type.items(), key=lambda x: x[1]['area'], reverse=True):
-    percentage = (data['area'] / total_area * 100) if total_area > 0 else 0
-    coverage_summary.append({
-        'type': tipo,
-        'count': data['count'],
-        'area_m2': round(data['area'], 2),
-        'area_ha': round(data['area'] / 10000, 2),
-        'percentage': round(percentage, 2)
-    })
+      const totalArea = Object.values(coverage).reduce((sum, c) => sum + c.area, 0);
+      const totalCount = features.length;
 
-output_data['layer_name'] = layer.name
-output_data['total_features'] = features.count()
-output_data['total_area_ha'] = round(total_area / 10000, 2)
-output_data['unique_types'] = len(coverage_by_type)
-output_data['coverage_by_type'] = coverage_summary
-output_data['dominant_type'] = coverage_summary[0]['type'] if coverage_summary else None
+      const distribution = Object.entries(coverage)
+        .map(([tipo, data]) => ({
+          tipo,
+          cantidad: data.count,
+          porcentaje_cantidad: `${Math.round((data.count / totalCount) * 1000) / 10}%`,
+          area_ha: Math.round((data.area / 10000) * 100) / 100,
+          porcentaje_area: `${totalArea > 0 ? Math.round((data.area / totalArea) * 1000) / 10 : 0}%`,
+        }))
+        .sort((a, b) => b.area_ha - a.area_ha);
 
-logger.info(f"Análisis de cobertura completado: {len(coverage_by_type)} tipos encontrados")
-`,
+      const dominant = distribution[0];
+
+      return {
+        '🏷️ Campo de Clasificación': classField,
+        '🏆 Tipo Dominante': dominant ? `${dominant.tipo} (${dominant.porcentaje_area})` : 'N/A',
+        '📊 Total de Tipos': distribution.length,
+        '📋 Distribución': distribution,
+      };
+    },
   },
   {
     id: 'buffer',
-    name: 'Análisis de Buffer',
-    description: 'Crea zonas de influencia alrededor de features y calcula áreas afectadas.',
+    name: 'Zonas de Influencia',
+    description: 'Calcula áreas de buffer y zonas de influencia.',
     icon: Ruler,
-    color: 'bg-orange-500',
-    agent_type: 'transformation',
-    code: `import logging
-logger = logging.getLogger(__name__)
+    color: 'from-orange-500 to-red-500',
+    execute: (geojson, _layer) => {
+      const features = geojson.features || [];
+      const bufferDistance = 100; // metros por defecto
+      
+      let totalOriginalArea = 0;
+      let totalBufferArea = 0;
+      const details: any[] = [];
 
-if not input_layers:
-    raise ValueError("Se requiere al menos una capa de entrada")
+      features.slice(0, 30).forEach((f, idx) => {
+        const originalArea = calculateArea(f.geometry);
+        const perimeter = calculatePerimeter(f.geometry);
+        // Área aproximada del buffer: área original + (perímetro × distancia) + (π × distancia²)
+        const bufferArea = originalArea + (perimeter * bufferDistance) + (Math.PI * bufferDistance * bufferDistance);
+        
+        totalOriginalArea += originalArea;
+        totalBufferArea += bufferArea;
 
-layer = input_layers[0]
-features = layer.features.filter(is_active=True)
+        details.push({
+          feature: idx + 1,
+          nombre: f.properties?.nombre || f.properties?.name || `Feature ${idx + 1}`,
+          area_original_ha: Math.round((originalArea / 10000) * 100) / 100,
+          area_con_buffer_ha: Math.round((bufferArea / 10000) * 100) / 100,
+        });
+      });
 
-# Parámetro: distancia del buffer en metros
-buffer_distance = parameters.get('buffer_distance', 100)
-
-buffer_results = []
-total_buffer_area = 0
-
-for feature in features:
-    if feature.geometry:
-        try:
-            # Crear buffer
-            buffer_geom = feature.geometry.buffer(buffer_distance)
-            buffer_area = buffer_geom.area
-            total_buffer_area += buffer_area
-            
-            buffer_results.append({
-                'feature_id': feature.id,
-                'original_area_m2': round(feature.geometry.area, 2),
-                'buffer_area_m2': round(buffer_area, 2),
-                'area_increase': round(buffer_area - feature.geometry.area, 2)
-            })
-        except Exception as e:
-            logger.warning(f"Error creando buffer para feature {feature.id}: {e}")
-
-output_data['layer_name'] = layer.name
-output_data['buffer_distance_m'] = buffer_distance
-output_data['total_features'] = features.count()
-output_data['processed_features'] = len(buffer_results)
-output_data['total_buffer_area_m2'] = round(total_buffer_area, 2)
-output_data['total_buffer_area_ha'] = round(total_buffer_area / 10000, 2)
-output_data['buffer_details'] = buffer_results[:20]  # Primeros 20
-
-logger.info(f"Buffer de {buffer_distance}m aplicado a {len(buffer_results)} features")
-`,
+      return {
+        '⚙️ Parámetros': {
+          distancia_buffer_m: bufferDistance,
+          features_analizadas: Math.min(features.length, 30),
+          total_features: features.length,
+        },
+        '📊 Resumen': {
+          area_original_ha: Math.round((totalOriginalArea / 10000) * 100) / 100,
+          area_con_buffer_ha: Math.round((totalBufferArea / 10000) * 100) / 100,
+          incremento_ha: Math.round(((totalBufferArea - totalOriginalArea) / 10000) * 100) / 100,
+          porcentaje_incremento: totalOriginalArea > 0 
+            ? `${Math.round(((totalBufferArea - totalOriginalArea) / totalOriginalArea) * 100)}%` 
+            : '0%',
+        },
+        '📋 Detalle (primeros 30)': details,
+      };
+    },
   },
   {
-    id: 'comparison',
-    name: 'Comparador de Capas',
-    description: 'Compara dos capas temporales para detectar cambios en área, cantidad y distribución.',
+    id: 'compare',
+    name: 'Análisis Temporal',
+    description: 'Analiza distribución temporal si hay campos de fecha.',
     icon: GitCompare,
-    color: 'bg-red-500',
-    agent_type: 'change_detection',
-    code: `import logging
-logger = logging.getLogger(__name__)
+    color: 'from-red-500 to-rose-500',
+    execute: (geojson, _layer) => {
+      const features = geojson.features || [];
+      const sampleProps = features[0]?.properties || {};
+      
+      // Detectar campos de fecha
+      const dateFields = Object.keys(sampleProps).filter((key) => {
+        const value = sampleProps[key];
+        if (typeof value !== 'string') return false;
+        return /\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4}|^\d{4}$/.test(value);
+      });
 
-if len(input_layers) < 2:
-    raise ValueError("Se requieren exactamente 2 capas para comparar")
+      if (dateFields.length === 0) {
+        return {
+          '⚠️ Aviso': 'No se detectaron campos de fecha en los datos',
+          '📋 Campos Disponibles': Object.keys(sampleProps),
+          '📊 Estadísticas Actuales': {
+            total_features: features.length,
+            area_total_ha: Math.round(features.reduce((sum, f) => sum + calculateArea(f.geometry), 0) / 10000),
+          },
+        };
+      }
 
-layer1 = input_layers[0]
-layer2 = input_layers[1]
+      const dateField = dateFields[0];
+      const temporal: Record<string, number> = {};
 
-features1 = layer1.features.filter(is_active=True)
-features2 = layer2.features.filter(is_active=True)
+      features.forEach((f) => {
+        const dateValue = f.properties?.[dateField];
+        if (dateValue) {
+          const match = String(dateValue).match(/\d{4}/);
+          const year = match ? match[0] : 'Desconocido';
+          temporal[year] = (temporal[year] || 0) + 1;
+        }
+      });
 
-# Calcular métricas de cada capa
-def get_layer_metrics(features):
-    total_area = 0
-    for f in features:
-        if f.geometry:
-            total_area += f.geometry.area
-    return {
-        'count': features.count(),
-        'total_area': total_area
-    }
+      const distribution = Object.entries(temporal)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([periodo, cantidad]) => ({ periodo, cantidad }));
 
-metrics1 = get_layer_metrics(features1)
-metrics2 = get_layer_metrics(features2)
-
-# Calcular diferencias
-count_diff = metrics2['count'] - metrics1['count']
-area_diff = metrics2['total_area'] - metrics1['total_area']
-
-count_change_pct = ((metrics2['count'] - metrics1['count']) / metrics1['count'] * 100) if metrics1['count'] > 0 else 0
-area_change_pct = ((metrics2['total_area'] - metrics1['total_area']) / metrics1['total_area'] * 100) if metrics1['total_area'] > 0 else 0
-
-output_data['layer1'] = {
-    'name': layer1.name,
-    'feature_count': metrics1['count'],
-    'total_area_ha': round(metrics1['total_area'] / 10000, 2)
-}
-output_data['layer2'] = {
-    'name': layer2.name,
-    'feature_count': metrics2['count'],
-    'total_area_ha': round(metrics2['total_area'] / 10000, 2)
-}
-output_data['changes'] = {
-    'feature_count_diff': count_diff,
-    'feature_count_change_pct': round(count_change_pct, 2),
-    'area_diff_ha': round(area_diff / 10000, 2),
-    'area_change_pct': round(area_change_pct, 2)
-}
-output_data['summary'] = f"{'Aumento' if area_diff > 0 else 'Disminución'} de {abs(round(area_change_pct, 1))}% en área"
-
-logger.info(f"Comparación completada: {count_diff:+d} features, {area_change_pct:+.1f}% área")
-`,
+      return {
+        '📅 Campo de Fecha Detectado': dateField,
+        '📊 Distribución Temporal': distribution,
+        '📈 Períodos Encontrados': Object.keys(temporal).length,
+        '📋 Total Features': features.length,
+      };
+    },
   },
   {
     id: 'report',
     name: 'Generador de Reporte',
-    description: 'Genera un reporte completo en formato estructurado con todas las métricas de la capa.',
+    description: 'Reporte completo con toda la información de la capa.',
     icon: FileText,
-    color: 'bg-teal-500',
-    agent_type: 'export',
-    code: `import logging
-from datetime import datetime
-logger = logging.getLogger(__name__)
+    color: 'from-teal-500 to-cyan-500',
+    execute: (geojson, layer) => {
+      const features = geojson.features || [];
+      const sampleProps = features[0]?.properties || {};
+      const fields = Object.keys(sampleProps);
 
-if not input_layers:
-    raise ValueError("Se requiere al menos una capa de entrada")
+      let totalArea = 0;
+      let totalPerimeter = 0;
 
-layer = input_layers[0]
-features = layer.features.filter(is_active=True)
+      features.forEach((f) => {
+        totalArea += calculateArea(f.geometry);
+        totalPerimeter += calculatePerimeter(f.geometry);
+      });
 
-# Recopilar información completa
-report = {
-    'metadata': {
-        'report_date': datetime.now().isoformat(),
-        'layer_name': layer.name,
-        'layer_id': layer.id,
-        'geometry_type': layer.geometry_type,
-        'srid': layer.srid,
-        'created_at': layer.created_at.isoformat() if layer.created_at else None,
+      // Análisis de campos
+      const fieldAnalysis: Record<string, any> = {};
+      fields.slice(0, 10).forEach((field) => {
+        const values = features.map((f) => f.properties?.[field]).filter((v) => v != null);
+        const uniqueValues = new Set(values);
+
+        fieldAnalysis[field] = {
+          valores_totales: values.length,
+          valores_unicos: uniqueValues.size,
+          tipo: typeof values[0],
+          muestra: Array.from(uniqueValues).slice(0, 3),
+        };
+      });
+
+      return {
+        '📋 Metadata': {
+          generado: new Date().toLocaleString('es-CO'),
+          generador: 'SMGI - Centro de Análisis',
+          version: '3.1',
+        },
+        '🗺️ Información de Capa': {
+          nombre: layer.name,
+          total_features: features.length,
+          tipo_geometria: layer.geometry_type,
+          srid: layer.srid,
+          total_campos: fields.length,
+        },
+        '📐 Estadísticas Espaciales': {
+          area_total_ha: Math.round((totalArea / 10000) * 100) / 100,
+          area_total_km2: Math.round((totalArea / 1000000) * 1000) / 1000,
+          perimetro_total_km: Math.round((totalPerimeter / 1000) * 100) / 100,
+          area_promedio_ha: Math.round((totalArea / features.length / 10000) * 100) / 100,
+        },
+        '📊 Análisis de Campos': fieldAnalysis,
+        '📝 Muestra de Datos': features.slice(0, 2).map((f) => f.properties),
+      };
     },
-    'statistics': {
-        'total_features': features.count(),
-        'total_area_m2': 0,
-        'total_area_ha': 0,
-        'total_perimeter_m': 0,
-        'avg_area_m2': 0,
-    },
-    'attributes': {
-        'fields': [],
-        'sample_values': {}
-    },
-    'quality': {
-        'valid_geometries': 0,
-        'invalid_geometries': 0,
-        'features_with_attributes': 0,
-    }
-}
-
-# Calcular estadísticas
-total_area = 0
-total_perimeter = 0
-valid_geoms = 0
-with_attrs = 0
-
-for feature in features:
-    if feature.geometry:
-        if feature.geometry.valid:
-            valid_geoms += 1
-        total_area += feature.geometry.area if hasattr(feature.geometry, 'area') else 0
-        total_perimeter += feature.geometry.length if hasattr(feature.geometry, 'length') else 0
-    
-    if feature.properties and len(feature.properties) > 0:
-        with_attrs += 1
-        # Recopilar campos
-        for key in feature.properties.keys():
-            if key not in report['attributes']['fields']:
-                report['attributes']['fields'].append(key)
-                report['attributes']['sample_values'][key] = feature.properties[key]
-
-report['statistics']['total_area_m2'] = round(total_area, 2)
-report['statistics']['total_area_ha'] = round(total_area / 10000, 2)
-report['statistics']['total_perimeter_m'] = round(total_perimeter, 2)
-report['statistics']['avg_area_m2'] = round(total_area / features.count(), 2) if features.count() > 0 else 0
-
-report['quality']['valid_geometries'] = valid_geoms
-report['quality']['invalid_geometries'] = features.count() - valid_geoms
-report['quality']['features_with_attributes'] = with_attrs
-report['quality']['quality_score'] = round((valid_geoms / features.count()) * 100, 1) if features.count() > 0 else 0
-
-output_data.update(report)
-
-logger.info(f"Reporte generado para '{layer.name}': {features.count()} features")
-`,
   },
   {
     id: 'centroid',
-    name: 'Calculador de Centroides',
-    description: 'Calcula el centroide de cada feature y el centroide general de la capa.',
+    name: 'Centroides',
+    description: 'Calcula el centro geométrico de cada feature.',
     icon: MapPin,
-    color: 'bg-pink-500',
-    agent_type: 'transformation',
-    code: `import logging
-logger = logging.getLogger(__name__)
+    color: 'from-pink-500 to-rose-500',
+    execute: (geojson, _layer) => {
+      const features = geojson.features || [];
+      const centroids: any[] = [];
+      let sumX = 0, sumY = 0, validCount = 0;
 
-if not input_layers:
-    raise ValueError("Se requiere al menos una capa de entrada")
+      features.slice(0, 50).forEach((f, idx) => {
+        const centroid = calculateCentroid(f.geometry);
+        if (centroid) {
+          centroids.push({
+            id: idx + 1,
+            nombre: f.properties?.nombre || f.properties?.name || `Feature ${idx + 1}`,
+            longitud: Math.round(centroid.x * 1000000) / 1000000,
+            latitud: Math.round(centroid.y * 1000000) / 1000000,
+          });
+          sumX += centroid.x;
+          sumY += centroid.y;
+          validCount++;
+        }
+      });
 
-layer = input_layers[0]
-features = layer.features.filter(is_active=True)
+      // Bounding Box
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      features.forEach((f) => {
+        if (f.geometry?.coordinates) {
+          const coords = JSON.stringify(f.geometry.coordinates);
+          const numbers = coords.match(/-?\d+\.?\d*/g)?.map(Number) || [];
+          for (let i = 0; i < numbers.length; i += 2) {
+            if (numbers[i] < minX) minX = numbers[i];
+            if (numbers[i] > maxX) maxX = numbers[i];
+            if (numbers[i + 1] < minY) minY = numbers[i + 1];
+            if (numbers[i + 1] > maxY) maxY = numbers[i + 1];
+          }
+        }
+      });
 
-centroids = []
-all_x = []
-all_y = []
-
-for feature in features:
-    if feature.geometry:
-        try:
-            centroid = feature.geometry.centroid
-            centroids.append({
-                'feature_id': feature.id,
-                'x': round(centroid.x, 6),
-                'y': round(centroid.y, 6),
-                'coordinates': [round(centroid.x, 6), round(centroid.y, 6)]
-            })
-            all_x.append(centroid.x)
-            all_y.append(centroid.y)
-        except Exception as e:
-            logger.warning(f"Error calculando centroide para feature {feature.id}: {e}")
-
-# Centroide general (promedio de centroides)
-general_centroid = None
-if all_x and all_y:
-    general_centroid = {
-        'x': round(sum(all_x) / len(all_x), 6),
-        'y': round(sum(all_y) / len(all_y), 6)
-    }
-
-output_data['layer_name'] = layer.name
-output_data['total_features'] = features.count()
-output_data['centroids_calculated'] = len(centroids)
-output_data['general_centroid'] = general_centroid
-output_data['feature_centroids'] = centroids[:50]  # Primeros 50
-
-logger.info(f"Centroides calculados: {len(centroids)} features")
-`,
+      return {
+        '📍 Centroide General': validCount > 0 ? {
+          longitud: Math.round((sumX / validCount) * 1000000) / 1000000,
+          latitud: Math.round((sumY / validCount) * 1000000) / 1000000,
+        } : 'No calculable',
+        '📦 Bounding Box': {
+          suroeste: `${Math.round(minY * 10000) / 10000}, ${Math.round(minX * 10000) / 10000}`,
+          noreste: `${Math.round(maxY * 10000) / 10000}, ${Math.round(maxX * 10000) / 10000}`,
+        },
+        '📋 Centroides por Feature': centroids,
+        '📊 Total Calculados': `${centroids.length} de ${features.length}`,
+      };
+    },
   },
   {
     id: 'filter',
-    name: 'Filtro por Atributos',
-    description: 'Filtra features basado en condiciones sobre sus atributos.',
+    name: 'Explorador de Atributos',
+    description: 'Explora y resume los atributos de la capa.',
     icon: Filter,
-    color: 'bg-indigo-500',
-    agent_type: 'classification',
-    code: `import logging
-logger = logging.getLogger(__name__)
+    color: 'from-indigo-500 to-purple-500',
+    execute: (geojson, layer) => {
+      const features = geojson.features || [];
+      const sampleProps = features[0]?.properties || {};
+      const fields = Object.keys(sampleProps);
 
-if not input_layers:
-    raise ValueError("Se requiere al menos una capa de entrada")
+      const fieldSummary = fields.map((field) => {
+        const values = features.map((f) => f.properties?.[field]);
+        const nonNull = values.filter((v) => v != null);
+        const unique = new Set(nonNull);
+        const firstValue = nonNull[0];
+        const tipo = typeof firstValue;
 
-layer = input_layers[0]
-features = layer.features.filter(is_active=True)
+        let stats: any = {
+          campo: field,
+          tipo,
+          valores_totales: nonNull.length,
+          valores_unicos: unique.size,
+          nulos: values.length - nonNull.length,
+        };
 
-# Parámetros de filtro
-field_name = parameters.get('field_name', '')
-operator = parameters.get('operator', 'equals')  # equals, contains, greater, less
-filter_value = parameters.get('value', '')
+        if (tipo === 'number') {
+          const nums = nonNull as number[];
+          stats.min = Math.round(Math.min(...nums) * 100) / 100;
+          stats.max = Math.round(Math.max(...nums) * 100) / 100;
+          stats.promedio = Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100;
+        } else if (unique.size <= 10) {
+          stats.valores = Array.from(unique).slice(0, 10);
+        }
 
-if not field_name:
-    raise ValueError("Debe especificar 'field_name' en los parámetros")
+        return stats;
+      });
 
-matching_features = []
-non_matching = 0
-
-for feature in features:
-    if not feature.properties:
-        non_matching += 1
-        continue
-    
-    field_value = feature.properties.get(field_name)
-    if field_value is None:
-        non_matching += 1
-        continue
-    
-    matches = False
-    
-    if operator == 'equals':
-        matches = str(field_value) == str(filter_value)
-    elif operator == 'contains':
-        matches = str(filter_value).lower() in str(field_value).lower()
-    elif operator == 'greater':
-        try:
-            matches = float(field_value) > float(filter_value)
-        except (ValueError, TypeError):
-            pass
-    elif operator == 'less':
-        try:
-            matches = float(field_value) < float(filter_value)
-        except (ValueError, TypeError):
-            pass
-    elif operator == 'not_equals':
-        matches = str(field_value) != str(filter_value)
-    
-    if matches:
-        matching_features.append({
-            'feature_id': feature.id,
-            'value': field_value
-        })
-    else:
-        non_matching += 1
-
-output_data['layer_name'] = layer.name
-output_data['total_features'] = features.count()
-output_data['filter_criteria'] = {
-    'field': field_name,
-    'operator': operator,
-    'value': filter_value
-}
-output_data['matching_count'] = len(matching_features)
-output_data['non_matching_count'] = non_matching
-output_data['match_percentage'] = round((len(matching_features) / features.count()) * 100, 2) if features.count() > 0 else 0
-output_data['matching_features'] = matching_features[:100]
-
-logger.info(f"Filtro aplicado: {len(matching_features)}/{features.count()} features coinciden")
-`,
+      return {
+        '📊 Resumen de Capa': {
+          nombre: layer.name,
+          total_features: features.length,
+          total_campos: fields.length,
+        },
+        '📋 Análisis de Campos': fieldSummary,
+        '📝 Muestra de Datos': features.slice(0, 5).map((f, i) => ({
+          feature: i + 1,
+          ...f.properties,
+        })),
+      };
+    },
   },
 ];
 
 // ============================================================================
-// Execute Agent Modal (mejorado)
+// Prompts predefinidos para LLM
 // ============================================================================
 
-interface ExecuteModalProps {
-  agent: Agent | typeof BUILTIN_AGENTS[0];
-  onClose: () => void;
-  onSuccess: () => void;
-  isBuiltin?: boolean;
+const LLM_PROMPTS = [
+  {
+    id: 'summary',
+    name: 'Resumen General',
+    prompt: 'Analiza estos datos geoespaciales y proporciona un resumen ejecutivo con los hallazgos más importantes.',
+    icon: FileText,
+  },
+  {
+    id: 'patterns',
+    name: 'Detectar Patrones',
+    prompt: 'Identifica patrones espaciales, clusters o agrupaciones en estos datos. ¿Hay concentraciones geográficas?',
+    icon: TrendingUp,
+  },
+  {
+    id: 'anomalies',
+    name: 'Buscar Anomalías',
+    prompt: 'Busca anomalías, outliers o datos atípicos. ¿Hay features con valores inusuales o geometrías extrañas?',
+    icon: AlertTriangle,
+  },
+  {
+    id: 'recommendations',
+    name: 'Recomendaciones',
+    prompt: 'Basándote en estos datos, ¿qué acciones o análisis adicionales recomendarías?',
+    icon: Wand2,
+  },
+];
+
+// ============================================================================
+// LLM Service (Groq/Gemini GRATIS) - MODELOS ACTUALIZADOS
+// ============================================================================
+
+interface LLMConfig {
+  provider: 'groq' | 'gemini';
+  apiKey: string;
+  model: string;
 }
 
-const ExecuteAgentModal: React.FC<ExecuteModalProps> = ({ agent, onClose, onSuccess, isBuiltin }) => {
-  const toast = useToast();
-  const [selectedLayers, setSelectedLayers] = useState<number[]>([]);
-  const [parameters, setParameters] = useState<Record<string, string>>({});
+const analyzWithLLM = async (
+  layerData: any,
+  geojson: GeoJSONCollection | null,
+  prompt: string,
+  config: LLMConfig
+): Promise<string> => {
+  if (!config.apiKey) {
+    throw new Error('API Key no configurada');
+  }
 
-  const { data: layersData } = useQuery({
-    queryKey: ['layers'],
-    queryFn: () => layerService.getLayers({ page_size: 100 }),
-  });
-
-  // Para agentes predeterminados, primero creamos el agente y luego lo ejecutamos
-  const createAndExecuteMutation = useMutation({
-    mutationFn: async () => {
-      if (isBuiltin) {
-        // Crear agente desde código predeterminado
-        const builtinAgent = agent as typeof BUILTIN_AGENTS[0];
-        const newAgent = await agentService.createAgent({
-          name: builtinAgent.name,
-          description: builtinAgent.description,
-          agent_type: builtinAgent.agent_type,
-          code: builtinAgent.code,
-          is_public: false,
-        });
-        
-        // Publicar el agente
-        await agentService.publishAgent(newAgent.id);
-        
-        // Ejecutar
-        return agentService.executeAgent(newAgent.id, {
-          parameters: {
-            ...parameters,
-            input_layers: selectedLayers,
-          },
-        });
-      } else {
-        // Ejecutar agente existente
-        return agentService.executeAgent((agent as Agent).id, {
-          parameters: {
-            ...parameters,
-            input_layers: selectedLayers,
-          },
-        });
-      }
-    },
-    onSuccess: () => {
-      toast.success('Ejecución iniciada', `El agente "${agent.name}" está procesando...`);
-      onSuccess();
-      onClose();
-    },
-    onError: (error: any) => {
-      toast.error('Error', error.response?.data?.error || error.message || 'Error al ejecutar');
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedLayers.length === 0) {
-      toast.warning('Atención', 'Selecciona al menos una capa');
-      return;
-    }
-    createAndExecuteMutation.mutate();
+  // Preparar datos para el LLM
+  const sampleFeatures = geojson?.features?.slice(0, 15) || [];
+  const stats = {
+    total_features: geojson?.features?.length || layerData.feature_count,
+    area_total_ha: sampleFeatures.length > 0 
+      ? Math.round(sampleFeatures.reduce((sum, f) => sum + calculateArea(f.geometry), 0) / 10000)
+      : 'No disponible',
   };
 
-  const toggleLayer = (layerId: number) => {
-    setSelectedLayers(prev => 
-      prev.includes(layerId) 
-        ? prev.filter(id => id !== layerId)
-        : [...prev, layerId]
-    );
+  const dataForLLM = {
+    layer_name: layerData.name,
+    geometry_type: layerData.geometry_type,
+    feature_count: layerData.feature_count,
+    srid: layerData.srid,
+    statistics: stats,
+    sample_properties: sampleFeatures.map(f => f.properties),
+    attributes: Object.keys(sampleFeatures[0]?.properties || {}),
   };
 
-  // Parámetros específicos por tipo de agente
-  const getParameterFields = () => {
-    const agentType = agent.agent_type;
-    
-    if (agentType === 'transformation' && agent.name.includes('Buffer')) {
-      return (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Distancia del Buffer (metros)
-          </label>
-          <input
-            type="number"
-            value={parameters.buffer_distance || '100'}
-            onChange={(e) => setParameters({ ...parameters, buffer_distance: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-            placeholder="100"
-          />
-        </div>
-      );
-    }
-    
-    if (agentType === 'classification' || agent.name.includes('Filtro')) {
-      return (
-        <>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Campo a filtrar
-            </label>
-            <input
-              type="text"
-              value={parameters.field_name || ''}
-              onChange={(e) => setParameters({ ...parameters, field_name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              placeholder="tipo, clase, category..."
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Operador
-            </label>
-            <select
-              value={parameters.operator || 'equals'}
-              onChange={(e) => setParameters({ ...parameters, operator: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-            >
-              <option value="equals">Igual a</option>
-              <option value="not_equals">Diferente de</option>
-              <option value="contains">Contiene</option>
-              <option value="greater">Mayor que</option>
-              <option value="less">Menor que</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Valor
-            </label>
-            <input
-              type="text"
-              value={parameters.value || ''}
-              onChange={(e) => setParameters({ ...parameters, value: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              placeholder="Valor a buscar..."
-            />
-          </div>
-        </>
-      );
-    }
-    
-    if (agentType === 'analysis' && agent.name.includes('Cobertura')) {
-      return (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Campo de clasificación
-          </label>
-          <input
-            type="text"
-            value={parameters.class_field || 'tipo'}
-            onChange={(e) => setParameters({ ...parameters, class_field: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-            placeholder="tipo, clase, category..."
-          />
-        </div>
-      );
-    }
-    
-    return null;
-  };
+  const systemPrompt = `Eres un experto en análisis de datos geoespaciales y GIS. 
+Analiza los datos proporcionados y responde en español de forma clara y estructurada.
+Usa formato markdown para mejor legibilidad.
+Si los datos tienen coordenadas, indica el sistema de referencia (SRID).
+Proporciona insights accionables y recomendaciones cuando sea apropiado.`;
 
-  const Icon = isBuiltin ? (agent as typeof BUILTIN_AGENTS[0]).icon : BrainCircuit;
+  const userPrompt = `${prompt}
+
+DATOS DE LA CAPA "${layerData.name}":
+- Total features: ${dataForLLM.feature_count}
+- Tipo geometría: ${dataForLLM.geometry_type}
+- SRID: ${dataForLLM.srid}
+- Área total aproximada: ${dataForLLM.statistics.area_total_ha} hectáreas
+- Campos disponibles: ${dataForLLM.attributes.join(', ')}
+
+MUESTRA DE DATOS (${sampleFeatures.length} features):
+\`\`\`json
+${JSON.stringify(dataForLLM.sample_properties, null, 2)}
+\`\`\``;
+
+  if (config.provider === 'groq') {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error?.message || `Error de API: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0]?.message?.content || 'Sin respuesta';
+  }
+
+  // Gemini
+  if (config.provider === 'gemini') {
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
+    
+    const response = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2000,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error?.message || `Error de API: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta';
+  }
+
+  throw new Error('Proveedor no soportado');
+};
+
+// ============================================================================
+// Modal de Configuración LLM
+// ============================================================================
+
+interface LLMConfigModalProps {
+  config: LLMConfig;
+  onSave: (config: LLMConfig) => void;
+  onClose: () => void;
+}
+
+const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ config, onSave, onClose }) => {
+  const [localConfig, setLocalConfig] = useState<LLMConfig>(config);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center p-4">
         <div className="fixed inset-0 bg-black/50" onClick={onClose} />
         
-        <div className="relative bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
-          {/* Header */}
-          <div className={`${isBuiltin ? (agent as typeof BUILTIN_AGENTS[0]).color : 'bg-purple-600'} p-6`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-lg">
-                  <Icon className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-white">Ejecutar Agente</h2>
-                  <p className="text-white/80 text-sm">{agent.name}</p>
-                </div>
+        <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-linear-to-br from-purple-500 to-pink-500 rounded-lg">
+                <Key className="h-5 w-5 text-white" />
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg">
-                <X className="h-5 w-5 text-white" />
-              </button>
+              <h2 className="text-xl font-bold text-gray-900">Configurar LLM</h2>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+              <X className="h-5 w-5 text-gray-500" />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {/* Provider */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Proveedor de IA
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setLocalConfig({ ...localConfig, provider: 'groq', model: 'llama-3.3-70b-versatile' })}
+                  className={`p-4 rounded-xl border-2 transition-all ${
+                    localConfig.provider === 'groq'
+                      ? 'border-orange-500 bg-orange-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="font-semibold text-gray-900">Groq</div>
+                  <div className="text-xs text-gray-500 mt-1">LLaMA 3.3 - Ultra rápido</div>
+                  <div className="text-xs text-green-600 font-medium mt-1">✓ GRATIS</div>
+                </button>
+                <button
+                  onClick={() => setLocalConfig({ ...localConfig, provider: 'gemini', model: 'gemini-1.5-flash' })}
+                  className={`p-4 rounded-xl border-2 transition-all ${
+                    localConfig.provider === 'gemini'
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="font-semibold text-gray-900">Gemini</div>
+                  <div className="text-xs text-gray-500 mt-1">Google AI</div>
+                  <div className="text-xs text-green-600 font-medium mt-1">✓ GRATIS</div>
+                </button>
+              </div>
+            </div>
+
+            {/* API Key */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                API Key
+              </label>
+              <input
+                type="password"
+                value={localConfig.apiKey}
+                onChange={(e) => setLocalConfig({ ...localConfig, apiKey: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                placeholder={localConfig.provider === 'groq' ? 'gsk_...' : 'AIza...'}
+              />
+              <p className="mt-2 text-xs text-gray-500">
+                {localConfig.provider === 'groq' ? (
+                  <>
+                    Obtén tu API Key gratis en{' '}
+                    <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">
+                      console.groq.com <ExternalLink className="h-3 w-3 inline" />
+                    </a>
+                  </>
+                ) : (
+                  <>
+                    Obtén tu API Key gratis en{' '}
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">
+                      Google AI Studio <ExternalLink className="h-3 w-3 inline" />
+                    </a>
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* Model - ACTUALIZADO */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Modelo
+              </label>
+              <select
+                value={localConfig.model}
+                onChange={(e) => setLocalConfig({ ...localConfig, model: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              >
+                {localConfig.provider === 'groq' ? (
+                  <>
+                    <option value="llama-3.3-70b-versatile">LLaMA 3.3 70B (Recomendado)</option>
+                    <option value="llama-3.1-8b-instant">LLaMA 3.1 8B (Más rápido)</option>
+                    <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
+                    <option value="gemma2-9b-it">Gemma 2 9B</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (Recomendado)</option>
+                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                  </>
+                )}
+              </select>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto max-h-[60vh]">
-            {/* Agent Info */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm text-gray-600">{agent.description}</p>
-            </div>
-
-            {/* Select Layers */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Capas de Entrada <span className="text-red-500">*</span>
-              </label>
-              <div className="border border-gray-300 rounded-lg max-h-48 overflow-y-auto">
-                {layersData?.results?.length ? (
-                  layersData.results.map((layer: any) => (
-                    <label
-                      key={layer.id}
-                      className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedLayers.includes(layer.id)}
-                        onChange={() => toggleLayer(layer.id)}
-                        className="h-4 w-4 text-blue-600 rounded"
-                      />
-                      <Layers className="h-4 w-4 text-gray-400" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{layer.name}</p>
-                        <p className="text-xs text-gray-500">
-                          {layer.feature_count || 0} features • {layer.geometry_type}
-                        </p>
-                      </div>
-                    </label>
-                  ))
-                ) : (
-                  <p className="p-4 text-sm text-gray-500 text-center">No hay capas disponibles</p>
-                )}
-              </div>
-              {selectedLayers.length > 0 && (
-                <p className="text-xs text-blue-600 mt-1">
-                  {selectedLayers.length} capa(s) seleccionada(s)
-                </p>
-              )}
-            </div>
-
-            {/* Dynamic Parameters */}
-            {getParameterFields() && (
-              <div className="space-y-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Parámetros
-                </label>
-                {getParameterFields()}
-              </div>
-            )}
-
-            {/* Submit */}
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={createAndExecuteMutation.isPending || selectedLayers.length === 0}
-                className={`flex-1 px-4 py-2 text-white rounded-lg disabled:opacity-50 flex items-center justify-center gap-2 ${
-                  isBuiltin ? (agent as typeof BUILTIN_AGENTS[0]).color : 'bg-purple-600 hover:bg-purple-700'
-                }`}
-              >
-                {createAndExecuteMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Procesando...
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4" />
-                    Ejecutar
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => {
+                onSave(localConfig);
+                onClose();
+              }}
+              disabled={!localConfig.apiKey}
+              className="flex-1 px-4 py-2 bg-linear-to-br from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 disabled:opacity-50"
+            >
+              Guardar
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -894,7 +1005,340 @@ const ExecuteAgentModal: React.FC<ExecuteModalProps> = ({ agent, onClose, onSucc
 };
 
 // ============================================================================
-// Create Agent Modal (con subida de archivo)
+// Panel de Análisis con LLM
+// ============================================================================
+
+interface LLMAnalysisPanelProps {
+  layers: Layer[];
+}
+
+const LLMAnalysisPanel: React.FC<LLMAnalysisPanelProps> = ({ layers }) => {
+  const toast = useToast();
+  const [selectedLayer, setSelectedLayer] = useState<number | null>(null);
+  const [prompt, setPrompt] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [response, setResponse] = useState<string | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
+  
+  // Cargar configuración del localStorage - MODELO ACTUALIZADO
+  const [llmConfig, setLlmConfig] = useState<LLMConfig>(() => {
+    const saved = localStorage.getItem('smgi_llm_config');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Actualizar modelo si es el descontinuado
+      if (parsed.model === 'llama-3.1-70b-versatile') {
+        parsed.model = 'llama-3.3-70b-versatile';
+      }
+      return parsed;
+    }
+    return {
+      provider: 'groq',
+      apiKey: '',
+      model: 'llama-3.3-70b-versatile', // MODELO ACTUALIZADO
+    };
+  });
+
+  // Guardar configuración
+  const saveLLMConfig = (config: LLMConfig) => {
+    setLlmConfig(config);
+    localStorage.setItem('smgi_llm_config', JSON.stringify(config));
+    toast.success('Configuración guardada', 'La API Key se ha guardado correctamente');
+  };
+
+  // Cargar GeoJSON de la capa
+  const { data: geojsonData, isLoading: loadingGeoJSON } = useQuery({
+    queryKey: ['layer-geojson-llm', selectedLayer],
+    queryFn: async () => {
+      if (!selectedLayer) return null;
+      try {
+        const data = await layerService.getLayerGeoJSON(selectedLayer);
+        return data as GeoJSONCollection;
+      } catch (error) {
+        console.error('Error cargando GeoJSON:', error);
+        return null;
+      }
+    },
+    enabled: !!selectedLayer,
+  });
+
+  const selectedLayerData = layers.find(l => l.id === selectedLayer);
+
+  const runAnalysis = async () => {
+    if (!selectedLayer || !prompt.trim()) {
+      toast.warning('Atención', 'Selecciona una capa y escribe un prompt');
+      return;
+    }
+
+    if (!llmConfig.apiKey) {
+      setShowConfig(true);
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setResponse(null);
+
+    try {
+      const result = await analyzWithLLM(selectedLayerData, geojsonData || null, prompt, llmConfig);
+      setResponse(result);
+      toast.success('Análisis completado', 'La IA ha procesado tu solicitud');
+    } catch (error: any) {
+      toast.error('Error', error.message || 'Error al analizar');
+      setResponse(`Error: ${error.message}`);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header con config */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Análisis con IA Generativa</h3>
+          <p className="text-sm text-gray-500">Usa LLMs gratuitos para analizar tus datos</p>
+        </div>
+        <button
+          onClick={() => setShowConfig(true)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
+            llmConfig.apiKey
+              ? 'border-green-500 bg-green-50 text-green-700'
+              : 'border-orange-500 bg-orange-50 text-orange-700'
+          }`}
+        >
+          {llmConfig.apiKey ? <Check className="h-4 w-4" /> : <Key className="h-4 w-4" />}
+          {llmConfig.apiKey ? `${llmConfig.provider.toUpperCase()} conectado` : 'Configurar API'}
+        </button>
+      </div>
+
+      {/* Selector de capa y prompts */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Capa a analizar
+          </label>
+          <select
+            value={selectedLayer || ''}
+            onChange={(e) => setSelectedLayer(Number(e.target.value) || null)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+          >
+            <option value="">Selecciona una capa</option>
+            {layers.map((layer) => (
+              <option key={layer.id} value={layer.id}>
+                {layer.name} ({layer.feature_count} features)
+              </option>
+            ))}
+          </select>
+          
+          {selectedLayer && selectedLayerData && (
+            <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm">
+              <div className="grid grid-cols-2 gap-2 text-gray-600">
+                <span>Tipo: <strong>{selectedLayerData.geometry_type}</strong></span>
+                <span>Features: <strong>{selectedLayerData.feature_count}</strong></span>
+                <span>SRID: <strong>{selectedLayerData.srid}</strong></span>
+                <span>GeoJSON: {loadingGeoJSON ? <Loader2 className="h-3 w-3 animate-spin inline" /> : geojsonData ? '✓' : '⚠️'}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Prompts rápidos */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Análisis rápidos
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {LLM_PROMPTS.map((template) => {
+              const Icon = template.icon;
+              return (
+                <button
+                  key={template.id}
+                  onClick={() => setPrompt(template.prompt)}
+                  className="flex items-center gap-2 p-2 text-left text-sm border border-gray-200 rounded-lg hover:bg-purple-50 hover:border-purple-300 transition-colors"
+                >
+                  <Icon className="h-4 w-4 text-purple-500 shrink-0" />
+                  <span className="truncate">{template.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Prompt input */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          ¿Qué quieres analizar?
+        </label>
+        <div className="relative">
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={3}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 resize-none pr-12"
+            placeholder="Escribe tu pregunta sobre los datos... Ej: ¿Cuáles son las áreas con mayor concentración?"
+          />
+          <button
+            onClick={runAnalysis}
+            disabled={!selectedLayer || !prompt.trim() || isAnalyzing}
+            className="absolute bottom-3 right-3 p-2 bg-linear-to-br from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isAnalyzing ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Send className="h-5 w-5" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Response */}
+      {isAnalyzing && (
+        <div className="flex items-center justify-center gap-3 py-8 bg-linear-to-br from-purple-50 to-pink-50 rounded-xl">
+          <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+          <span className="text-purple-700">Analizando con {llmConfig.provider.toUpperCase()} ({llmConfig.model})...</span>
+        </div>
+      )}
+
+      {response && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 bg-linear-to-br from-purple-500 to-pink-500 text-white flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bot className="h-5 w-5" />
+              <span className="font-medium">Respuesta de {llmConfig.provider.toUpperCase()}</span>
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(response);
+                toast.success('Copiado', 'Respuesta copiada al portapapeles');
+              }}
+              className="p-1 hover:bg-white/20 rounded"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="p-4 prose prose-sm max-w-none">
+            <div className="whitespace-pre-wrap text-gray-700">
+              {response}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de configuración */}
+      {showConfig && (
+        <LLMConfigModal
+          config={llmConfig}
+          onSave={saveLLMConfig}
+          onClose={() => setShowConfig(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+// ============================================================================
+// Modal de Ejecución para Agentes del Backend
+// ============================================================================
+
+interface ExecuteModalProps {
+  agent: any;
+  layers: Layer[];
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const ExecuteAgentModal: React.FC<ExecuteModalProps> = ({ agent, layers, onClose, onSuccess }) => {
+  const toast = useToast();
+  const [selectedLayers, setSelectedLayers] = useState<number[]>([]);
+
+  const executeMutation = useMutation({
+    mutationFn: () => agentService.executeAgent(agent.id, {
+      parameters: {
+        input_layers: selectedLayers,
+      },
+    }),
+    onSuccess: () => {
+      toast.success('Ejecución iniciada', 'El agente está procesando...');
+      onSuccess();
+      onClose();
+    },
+    onError: (error: any) => {
+      toast.error('Error', error.response?.data?.error || 'Error al ejecutar');
+    },
+  });
+
+  const toggleLayer = (id: number) => {
+    setSelectedLayers(prev => 
+      prev.includes(id) ? prev.filter(l => l !== id) : [...prev, id]
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+        
+        <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Ejecutar: {agent.name}</h2>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+              <X className="h-5 w-5 text-gray-500" />
+            </button>
+          </div>
+
+          <p className="text-sm text-gray-600 mb-4">{agent.description}</p>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Capas de entrada <span className="text-red-500">*</span>
+            </label>
+            <div className="border border-gray-300 rounded-lg max-h-40 overflow-y-auto">
+              {layers.map((layer) => (
+                <label
+                  key={layer.id}
+                  className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedLayers.includes(layer.id)}
+                    onChange={() => toggleLayer(layer.id)}
+                    className="h-4 w-4 text-purple-600 rounded"
+                  />
+                  <span className="text-sm text-gray-900">{layer.name}</span>
+                  <span className="text-xs text-gray-500 ml-auto">{layer.feature_count} features</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => executeMutation.mutate()}
+              disabled={selectedLayers.length === 0 || executeMutation.isPending}
+              className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {executeMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              Ejecutar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// Modal de Crear Agente
 // ============================================================================
 
 interface CreateAgentModalProps {
@@ -908,11 +1352,10 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ onClose, onSuccess 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [agentType, setAgentType] = useState('statistics');
-  const [uploadMode, setUploadMode] = useState<'code' | 'file'>('code');
   const [fileName, setFileName] = useState('');
   const [code, setCode] = useState(`# Variables disponibles:
 # - input_layers: lista de capas de entrada
-# - parameters: diccionario de parámetros
+# - parameters: diccionario de parámetros  
 # - output_data: diccionario para guardar resultados
 # - logger: para logging
 
@@ -929,17 +1372,10 @@ features = layer.features.filter(is_active=True)
 count = features.count()
 
 output_data['feature_count'] = count
-output_data['message'] = f'Procesadas {count} features'
+output_data['layer_name'] = layer.name
 
-logger.info(f"Análisis completado: {count} features")
+logger.info(f"Procesadas {count} features")
 `);
-
-  const { data: categories } = useQuery({
-    queryKey: ['agent-categories'],
-    queryFn: () => agentService.getCategories(),
-  });
-
-  const [selectedCategory, setSelectedCategory] = useState<number | ''>('');
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -955,9 +1391,8 @@ logger.info(f"Análisis completado: {count} features")
       reader.onload = (e) => {
         const content = e.target?.result as string;
         setCode(content);
-        setUploadMode('file');
         if (!name) {
-          setName(file.name.replace('.py', ''));
+          setName(file.name.replace('.py', '').replace(/_/g, ' '));
         }
       };
       reader.readAsText(file);
@@ -966,40 +1401,36 @@ logger.info(f"Análisis completado: {count} features")
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      // Obtener categorías para asignar la primera por defecto
+      const categories = await agentService.getCategories();
+      const defaultCategory = categories.results[0]?.id || 1;
+      
       const agent = await agentService.createAgent({
         name,
         description,
+        category: defaultCategory,
         agent_type: agentType,
         code,
-        category: selectedCategory as number,
         is_public: false,
       });
       
-      // Publicar automáticamente
       await agentService.publishAgent(agent.id);
-      
       return agent;
     },
     onSuccess: () => {
-      toast.success('Agente creado', 'El agente se ha creado y publicado correctamente');
+      toast.success('Agente creado', 'El agente se ha creado y publicado');
       onSuccess();
       onClose();
     },
     onError: (error: any) => {
-      toast.error('Error', error.response?.data?.error || error.response?.data?.code?.[0] || 'Error al crear el agente');
+      const errorMsg = error.response?.data?.code?.[0] 
+        || error.response?.data?.error 
+        || error.response?.data?.detail
+        || error.message 
+        || 'Error al crear el agente';
+      toast.error('Error', errorMsg);
     },
   });
-
-  const agentTypes = [
-    { value: 'statistics', label: 'Estadísticas', desc: 'Cálculos y métricas' },
-    { value: 'classification', label: 'Clasificación', desc: 'Categorización' },
-    { value: 'detection', label: 'Detección', desc: 'Identificar patrones' },
-    { value: 'transformation', label: 'Transformación', desc: 'Modificar datos' },
-    { value: 'analysis', label: 'Análisis', desc: 'Análisis general' },
-    { value: 'validation', label: 'Validación', desc: 'Verificar datos' },
-    { value: 'export', label: 'Exportación', desc: 'Generar archivos' },
-    { value: 'change_detection', label: 'Cambios', desc: 'Detectar cambios' },
-  ];
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -1007,15 +1438,14 @@ logger.info(f"Análisis completado: {count} features")
         <div className="fixed inset-0 bg-black/50" onClick={onClose} />
         
         <div className="relative bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-          {/* Header */}
-          <div className="bg-linear-to-r from-green-600 to-teal-600 p-6">
+          <div className="bg-linear-to-br from-green-500 to-teal-500 p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white/20 rounded-lg">
                   <FileCode className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-white">Crear Agente Personalizado</h2>
+                  <h2 className="text-xl font-bold text-white">Crear Agente</h2>
                   <p className="text-green-100 text-sm">Escribe código o sube un archivo .py</p>
                 </div>
               </div>
@@ -1026,31 +1456,14 @@ logger.info(f"Análisis completado: {count} features")
           </div>
 
           <div className="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
-            {/* Upload Mode Toggle */}
-            <div className="flex gap-2 p-1 bg-gray-100 rounded-lg w-fit">
+            {/* Upload button */}
+            <div className="flex gap-2">
               <button
-                type="button"
-                onClick={() => setUploadMode('code')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  uploadMode === 'code'
-                    ? 'bg-white text-gray-900 shadow'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Code className="h-4 w-4 inline mr-2" />
-                Escribir Código
-              </button>
-              <button
-                type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  uploadMode === 'file'
-                    ? 'bg-white text-gray-900 shadow'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"
               >
-                <Upload className="h-4 w-4 inline mr-2" />
-                Subir Archivo .py
+                <Upload className="h-4 w-4" />
+                Subir archivo .py
               </button>
               <input
                 ref={fileInputRef}
@@ -1059,41 +1472,48 @@ logger.info(f"Análisis completado: {count} features")
                 onChange={handleFileUpload}
                 className="hidden"
               />
+              {fileName && (
+                <span className="flex items-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg text-sm">
+                  <Check className="h-4 w-4" />
+                  {fileName}
+                </span>
+              )}
             </div>
 
-            {/* File indicator */}
-            {uploadMode === 'file' && fileName && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-                <Check className="h-4 w-4 text-green-600" />
-                <span className="text-sm text-green-700">Archivo cargado: {fileName}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUploadMode('code');
-                    setFileName('');
-                  }}
-                  className="ml-auto text-green-600 hover:text-green-700"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+            {/* Form */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  placeholder="Mi Agente de Análisis"
+                />
               </div>
-            )}
-
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nombre del Agente <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                placeholder="Mi Agente de Análisis"
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo
+                </label>
+                <select
+                  value={agentType}
+                  onChange={(e) => setAgentType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="statistics">Estadísticas</option>
+                  <option value="classification">Clasificación</option>
+                  <option value="detection">Detección</option>
+                  <option value="transformation">Transformación</option>
+                  <option value="analysis">Análisis</option>
+                  <option value="validation">Validación</option>
+                  <option value="export">Exportación</option>
+                </select>
+              </div>
             </div>
 
-            {/* Description */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Descripción
@@ -1103,89 +1523,31 @@ logger.info(f"Análisis completado: {count} features")
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                placeholder="Describe qué hace tu agente..."
+                placeholder="¿Qué hace tu agente?"
               />
             </div>
 
-            {/* Type and Category */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tipo de Agente <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={agentType}
-                  onChange={(e) => setAgentType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                >
-                  {agentTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label} - {type.desc}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Categoría
-                </label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value ? Number(e.target.value) : '')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="">Sin categoría</option>
-                  {categories?.results?.map((cat: any) => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Code Editor */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm font-medium text-gray-700">
-                  Código Python <span className="text-red-500">*</span>
-                </label>
-                <span className="text-xs text-gray-500">
-                  {code.split('\n').length} líneas
-                </span>
-              </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Código Python <span className="text-red-500">*</span>
+              </label>
               <div className="border border-gray-300 rounded-lg overflow-hidden">
-                <div className="bg-gray-800 text-gray-300 px-4 py-2 text-xs flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Code className="h-4 w-4" />
-                    {fileName || 'agent_code.py'}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => navigator.clipboard.writeText(code)}
-                    className="hover:text-white"
-                  >
-                    <Copy className="h-4 w-4" />
-                  </button>
+                <div className="bg-gray-800 text-gray-300 px-4 py-2 text-xs flex items-center gap-2">
+                  <Code className="h-4 w-4" />
+                  {fileName || 'agent_code.py'}
                 </div>
                 <textarea
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  rows={15}
+                  rows={12}
                   className="w-full px-4 py-3 font-mono text-sm bg-gray-900 text-green-400 focus:outline-none resize-y"
                   spellCheck={false}
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Variables disponibles: <code className="bg-gray-100 px-1 rounded">input_layers</code>, 
-                <code className="bg-gray-100 px-1 rounded ml-1">parameters</code>, 
-                <code className="bg-gray-100 px-1 rounded ml-1">output_data</code>, 
-                <code className="bg-gray-100 px-1 rounded ml-1">logger</code>
-              </p>
             </div>
 
-            {/* Actions */}
             <div className="flex gap-3 pt-4">
               <button
-                type="button"
                 onClick={onClose}
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
@@ -1194,7 +1556,7 @@ logger.info(f"Análisis completado: {count} features")
               <button
                 onClick={() => createMutation.mutate()}
                 disabled={!name || !code || createMutation.isPending}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 bg-linear-to-br from-green-500 to-teal-500 text-white rounded-lg hover:from-green-600 hover:to-teal-600 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {createMutation.isPending ? (
                   <>
@@ -1204,7 +1566,7 @@ logger.info(f"Análisis completado: {count} features")
                 ) : (
                   <>
                     <Upload className="h-4 w-4" />
-                    Crear y Publicar
+                    Crear Agente
                   </>
                 )}
               </button>
@@ -1217,35 +1579,16 @@ logger.info(f"Análisis completado: {count} features")
 };
 
 // ============================================================================
-// Execution Detail Modal
+// Modal de Resultado de Análisis Local
 // ============================================================================
 
-interface ExecutionDetailModalProps {
-  execution: Execution;
+interface LocalResultModalProps {
+  result: LocalAnalysisResult;
   onClose: () => void;
 }
 
-const ExecutionDetailModal: React.FC<ExecutionDetailModalProps> = ({ execution, onClose }) => {
-  const [copied, setCopied] = useState(false);
-  
-  const statusConfig = {
-    pending: { color: 'bg-gray-100 text-gray-700', icon: Clock, label: 'Pendiente' },
-    running: { color: 'bg-blue-100 text-blue-700', icon: Loader2, label: 'Ejecutando' },
-    completed: { color: 'bg-green-100 text-green-700', icon: CheckCircle2, label: 'Completado' },
-    failed: { color: 'bg-red-100 text-red-700', icon: XCircle, label: 'Fallido' },
-    cancelled: { color: 'bg-orange-100 text-orange-700', icon: AlertTriangle, label: 'Cancelado' },
-  };
-
-  const config = statusConfig[execution.status] || statusConfig.pending;
-  const StatusIcon = config.icon;
-
-  const copyResult = () => {
-    if (execution.result) {
-      navigator.clipboard.writeText(JSON.stringify(execution.result, null, 2));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
+const LocalResultModal: React.FC<LocalResultModalProps> = ({ result, onClose }) => {
+  const toast = useToast();
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -1253,82 +1596,45 @@ const ExecutionDetailModal: React.FC<ExecutionDetailModalProps> = ({ execution, 
         <div className="fixed inset-0 bg-black/50" onClick={onClose} />
         
         <div className="relative bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
-          <div className="p-6 border-b">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${config.color}`}>
-                  <StatusIcon className={`h-5 w-5 ${execution.status === 'running' ? 'animate-spin' : ''}`} />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">
-                    {execution.name || `Ejecución #${execution.id}`}
-                  </h2>
-                  <p className="text-sm text-gray-500">{execution.agent_name}</p>
-                </div>
+          <div className={`p-4 flex items-center justify-between ${
+            result.status === 'completed' ? 'bg-linear-to-br from-green-500 to-emerald-500' :
+            result.status === 'failed' ? 'bg-linear-to-br from-red-500 to-rose-500' :
+            'bg-linear-to-br from-blue-500 to-cyan-500'
+          } text-white`}>
+            <div className="flex items-center gap-3">
+              {result.status === 'completed' ? <CheckCircle2 className="h-5 w-5" /> :
+               result.status === 'failed' ? <XCircle className="h-5 w-5" /> :
+               <Loader2 className="h-5 w-5 animate-spin" />}
+              <div>
+                <h3 className="font-bold">{result.name}</h3>
+                <p className="text-sm opacity-90">{result.layerName}</p>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
-                <X className="h-5 w-5 text-gray-500" />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(JSON.stringify(result.result, null, 2));
+                  toast.success('Copiado', 'Resultado copiado al portapapeles');
+                }}
+                className="p-2 hover:bg-white/20 rounded-lg"
+              >
+                <Copy className="h-4 w-4" />
+              </button>
+              <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg">
+                <X className="h-5 w-5" />
               </button>
             </div>
           </div>
 
-          <div className="p-6 space-y-6 overflow-y-auto max-h-[60vh]">
-            {/* Info */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500">Estado</p>
-                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${config.color} mt-1`}>
-                  <StatusIcon className={`h-3 w-3 ${execution.status === 'running' ? 'animate-spin' : ''}`} />
-                  {config.label}
-                </span>
+          <div className="p-6 overflow-y-auto max-h-[70vh]">
+            {result.error ? (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                <strong>Error:</strong> {result.error}
               </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500">Duración</p>
-                <p className="font-medium text-gray-900 mt-1">
-                  {execution.duration ? `${execution.duration.toFixed(2)}s` : '-'}
-                </p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500">Iniciado</p>
-                <p className="text-sm text-gray-900 mt-1">
-                  {execution.started_at ? new Date(execution.started_at).toLocaleString('es-CO') : '-'}
-                </p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500">Completado</p>
-                <p className="text-sm text-gray-900 mt-1">
-                  {execution.completed_at ? new Date(execution.completed_at).toLocaleString('es-CO') : '-'}
-                </p>
-              </div>
-            </div>
-
-            {/* Result */}
-            {execution.result && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-700">Resultado</h3>
-                  <button
-                    onClick={copyResult}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
-                  >
-                    {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                    {copied ? 'Copiado!' : 'Copiar'}
-                  </button>
-                </div>
-                <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto max-h-96">
-                  {JSON.stringify(execution.result, null, 2)}
-                </pre>
-              </div>
-            )}
-
-            {/* Error */}
-            {execution.error_message && (
-              <div>
-                <h3 className="text-sm font-medium text-red-700 mb-2">Error</h3>
-                <pre className="bg-red-50 text-red-800 p-4 rounded-lg text-xs overflow-x-auto border border-red-200">
-                  {execution.error_message}
-                </pre>
-              </div>
+            ) : (
+              <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto whitespace-pre-wrap">
+                {JSON.stringify(result.result, null, 2)}
+              </pre>
             )}
           </div>
         </div>
@@ -1338,50 +1644,7 @@ const ExecutionDetailModal: React.FC<ExecutionDetailModalProps> = ({ execution, 
 };
 
 // ============================================================================
-// Builtin Agent Card
-// ============================================================================
-
-interface BuiltinAgentCardProps {
-  agent: typeof BUILTIN_AGENTS[0];
-  onExecute: () => void;
-}
-
-const BuiltinAgentCard: React.FC<BuiltinAgentCardProps> = ({ agent, onExecute }) => {
-  const Icon = agent.icon;
-  
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg transition-all hover:border-gray-300 group">
-      <div className="flex items-start gap-4">
-        <div className={`p-3 ${agent.color} rounded-xl text-white shrink-0`}>
-          <Icon className="h-6 w-6" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="font-semibold text-gray-900">{agent.name}</h3>
-              <span className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full mt-1">
-                Predeterminado
-              </span>
-            </div>
-          </div>
-          <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-            {agent.description}
-          </p>
-          <button
-            onClick={onExecute}
-            className={`mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 ${agent.color} text-white text-sm rounded-lg hover:opacity-90 transition-all`}
-          >
-            <Play className="h-4 w-4" />
-            Ejecutar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ============================================================================
-// Main Component
+// Componente Principal
 // ============================================================================
 
 export default function Analysis() {
@@ -1389,46 +1652,115 @@ export default function Analysis() {
   const toast = useToast();
 
   // State
-  const [activeTab, setActiveTab] = useState<'builtin' | 'custom' | 'executions'>('builtin');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedAgent, setSelectedAgent] = useState<Agent | typeof BUILTIN_AGENTS[0] | null>(null);
-  const [isBuiltinAgent, setIsBuiltinAgent] = useState(false);
+  const [activeTab, setActiveTab] = useState<'llm' | 'builtin' | 'custom' | 'history'>('llm');
+  const [selectedAgent, setSelectedAgent] = useState<any>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedExecution, setSelectedExecution] = useState<Execution | null>(null);
+  
+  // Estado para análisis locales (frontend)
+  const [localResults, setLocalResults] = useState<LocalAnalysisResult[]>([]);
+  const [selectedLocalResult, setSelectedLocalResult] = useState<LocalAnalysisResult | null>(null);
+  const [selectedBuiltinLayer, setSelectedBuiltinLayer] = useState<number | null>(null);
+  const [runningAnalysis, setRunningAnalysis] = useState<string | null>(null);
 
   // Queries
-  const { data: agentsData, isLoading: loadingAgents } = useQuery({
-    queryKey: ['agents', searchTerm],
-    queryFn: () => agentService.getAgents({
-      search: searchTerm || undefined,
-    }),
+  const { data: layersData } = useQuery({
+    queryKey: ['layers'],
+    queryFn: () => layerService.getLayers({ page_size: 100 }),
   });
 
-  const { data: executionsData, isLoading: loadingExecutions, refetch: refetchExecutions } = useQuery({
+  const { data: agentsData, isLoading: loadingAgents } = useQuery({
+    queryKey: ['agents'],
+    queryFn: () => agentService.getAgents({ status: 'published' }),
+  });
+
+  const { data: executionsData, refetch: refetchExecutions } = useQuery({
     queryKey: ['executions'],
     queryFn: () => agentService.getExecutions({ ordering: '-created_at' }),
     refetchInterval: 5000,
   });
 
+  const layers = layersData?.results || [];
   const agents = agentsData?.results || [];
   const executions = executionsData?.results || [];
 
-  // Filter builtin agents by search
-  const filteredBuiltinAgents = BUILTIN_AGENTS.filter(agent =>
-    !searchTerm || 
-    agent.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    agent.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Cargar GeoJSON para análisis predeterminados
+  const { data: builtinGeojson, isLoading: loadingBuiltinGeojson } = useQuery({
+    queryKey: ['builtin-geojson', selectedBuiltinLayer],
+    queryFn: async () => {
+      if (!selectedBuiltinLayer) return null;
+      try {
+        const data = await layerService.getLayerGeoJSON(selectedBuiltinLayer);
+        return data as GeoJSONCollection;
+      } catch (error) {
+        console.error('Error cargando GeoJSON:', error);
+        return null;
+      }
+    },
+    enabled: !!selectedBuiltinLayer,
+  });
 
-  const getStatusConfig = (status: string) => {
-    const configs: Record<string, { color: string; icon: any; label: string }> = {
-      pending: { color: 'bg-gray-100 text-gray-700', icon: Clock, label: 'Pendiente' },
-      running: { color: 'bg-blue-100 text-blue-700', icon: Loader2, label: 'Ejecutando' },
-      completed: { color: 'bg-green-100 text-green-700', icon: CheckCircle2, label: 'Completado' },
-      failed: { color: 'bg-red-100 text-red-700', icon: XCircle, label: 'Fallido' },
-      cancelled: { color: 'bg-orange-100 text-orange-700', icon: AlertTriangle, label: 'Cancelado' },
+  // Ejecutar análisis predeterminado
+  const runBuiltinAnalysis = async (analysis: BuiltinAnalysis) => {
+    if (!selectedBuiltinLayer) {
+      toast.warning('Atención', 'Selecciona una capa primero');
+      return;
+    }
+
+    if (!builtinGeojson) {
+      toast.error('Error', 'No se pudo cargar los datos de la capa');
+      return;
+    }
+
+    const layerData = layers.find(l => l.id === selectedBuiltinLayer);
+    if (!layerData) return;
+
+    setRunningAnalysis(analysis.id);
+
+    const resultId = `local-${Date.now()}`;
+    const newResult: LocalAnalysisResult = {
+      id: resultId,
+      name: analysis.name,
+      layerName: layerData.name,
+      type: analysis.id,
+      status: 'running',
+      timestamp: new Date(),
     };
-    return configs[status] || configs.pending;
+
+    setLocalResults(prev => [newResult, ...prev]);
+
+    // Simular pequeño delay para UX
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    try {
+      // Validar que layerData tenga los campos requeridos
+      const validLayerData: Layer = {
+        ...layerData,
+        geometry_type: layerData.geometry_type || 'Unknown',
+        feature_count: layerData.feature_count || 0,
+        srid: layerData.srid || 4326,
+      };
+      
+      const result = analysis.execute(builtinGeojson, validLayerData);
+      
+      setLocalResults(prev => prev.map(r => 
+        r.id === resultId 
+          ? { ...r, status: 'completed', result } 
+          : r
+      ));
+      
+      toast.success('Análisis completado', `${analysis.name} ejecutado correctamente`);
+      setActiveTab('history');
+    } catch (error: any) {
+      setLocalResults(prev => prev.map(r => 
+        r.id === resultId 
+          ? { ...r, status: 'failed', error: error.message } 
+          : r
+      ));
+      toast.error('Error', error.message);
+    } finally {
+      setRunningAnalysis(null);
+    }
   };
 
   return (
@@ -1438,19 +1770,19 @@ export default function Analysis() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-linear-to-br from-purple-500 to-blue-500 rounded-xl text-white">
+              <div className="p-2 bg-linear-to-br from-purple-500 to-pink-500 rounded-xl text-white">
                 <BrainCircuit className="h-6 w-6" />
               </div>
-              Análisis con IA
+              Centro de Análisis
             </h1>
             <p className="text-gray-500 mt-1">
-              Ejecuta análisis inteligentes sobre tus capas geoespaciales
+              Analiza tus capas geoespaciales con IA y agentes especializados
             </p>
           </div>
 
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-linear-to-r from-green-500 to-teal-500 text-white rounded-lg hover:from-green-600 hover:to-teal-600 transition-all shadow-lg shadow-green-500/25"
+            className="flex items-center gap-2 px-4 py-2 bg-linear-to-br from-green-500 to-teal-500 text-white rounded-lg hover:from-green-600 hover:to-teal-600 shadow-lg"
           >
             <PlusCircle className="h-4 w-4" />
             Crear Agente
@@ -1459,77 +1791,109 @@ export default function Analysis() {
 
         {/* Tabs */}
         <div className="mt-6 flex gap-2 flex-wrap">
-          <button
-            onClick={() => setActiveTab('builtin')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              activeTab === 'builtin'
-                ? 'bg-linear-to-r from-purple-500 to-blue-500 text-white shadow-lg shadow-purple-500/25'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border'
-            }`}
-          >
-            <Sparkles className="h-4 w-4" />
-            Predeterminados ({BUILTIN_AGENTS.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('custom')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              activeTab === 'custom'
-                ? 'bg-linear-to-r from-purple-500 to-blue-500 text-white shadow-lg shadow-purple-500/25'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border'
-            }`}
-          >
-            <Code className="h-4 w-4" />
-            Mis Agentes ({agents.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('executions')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              activeTab === 'executions'
-                ? 'bg-linear-to-r from-purple-500 to-blue-500 text-white shadow-lg shadow-purple-500/25'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border'
-            }`}
-          >
-            <History className="h-4 w-4" />
-            Historial ({executions.length})
-          </button>
+          {[
+            { id: 'llm', label: 'IA Generativa', icon: Bot, color: 'from-purple-500 to-pink-500' },
+            { id: 'builtin', label: 'Predeterminados', icon: Sparkles, color: 'from-blue-500 to-cyan-500' },
+            { id: 'custom', label: 'Mis Agentes', icon: Code, count: agents.length },
+            { id: 'history', label: 'Historial', icon: History, count: localResults.length + executions.length },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                  isActive
+                    ? `bg-linear-to-br ${tab.color || 'from-purple-500 to-pink-500'} text-white shadow-lg`
+                    : 'bg-white text-gray-700 hover:bg-gray-100 border'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+                {tab.count !== undefined && (
+                  <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                    isActive ? 'bg-white/20' : 'bg-gray-200'
+                  }`}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Search */}
-      {(activeTab === 'builtin' || activeTab === 'custom') && (
-        <div className="mb-6 relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar agentes..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white"
-          />
+      {/* Content */}
+      {activeTab === 'llm' && (
+        <div className="bg-white rounded-xl border p-6">
+          <LLMAnalysisPanel layers={layers} />
         </div>
       )}
 
-      {/* Content */}
       {activeTab === 'builtin' && (
-        <>
-          <div className="mb-4">
-            <p className="text-sm text-gray-500">
-              Agentes listos para usar - optimizados para análisis geoespacial
-            </p>
+        <div className="space-y-6">
+          {/* Selector de capa */}
+          <div className="bg-white rounded-xl border p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Selecciona una capa para analizar
+            </label>
+            <select
+              value={selectedBuiltinLayer || ''}
+              onChange={(e) => setSelectedBuiltinLayer(Number(e.target.value) || null)}
+              className="w-full md:w-96 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Selecciona una capa</option>
+              {layers.map((layer: Layer) => (
+                <option key={layer.id} value={layer.id}>
+                  {layer.name} ({layer.feature_count} features)
+                </option>
+              ))}
+            </select>
+            {selectedBuiltinLayer && (
+              <div className="mt-2 flex items-center gap-4 text-sm text-gray-600">
+                <span>Cargando datos: {loadingBuiltinGeojson ? <Loader2 className="h-4 w-4 animate-spin inline" /> : builtinGeojson ? '✓ Listo' : '⚠️ Error'}</span>
+              </div>
+            )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredBuiltinAgents.map((agent) => (
-              <BuiltinAgentCard
-                key={agent.id}
-                agent={agent}
-                onExecute={() => {
-                  setSelectedAgent(agent);
-                  setIsBuiltinAgent(true);
-                }}
-              />
-            ))}
+
+          {/* Grid de análisis */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {BUILTIN_ANALYSES.map((analysis) => {
+              const Icon = analysis.icon;
+              const isRunning = runningAnalysis === analysis.id;
+              return (
+                <div
+                  key={analysis.id}
+                  className="bg-white rounded-xl border p-5 hover:shadow-lg transition-all group"
+                >
+                  <div className={`w-12 h-12 rounded-xl bg-linear-to-br ${analysis.color} flex items-center justify-center mb-4`}>
+                    <Icon className="h-6 w-6 text-white" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900 mb-1">{analysis.name}</h3>
+                  <p className="text-sm text-gray-500 mb-4 line-clamp-2">{analysis.description}</p>
+                  <button
+                    onClick={() => runBuiltinAnalysis(analysis)}
+                    disabled={!selectedBuiltinLayer || !builtinGeojson || isRunning}
+                    className={`w-full py-2 rounded-lg text-white text-sm font-medium bg-linear-to-br ${analysis.color} hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+                  >
+                    {isRunning ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Ejecutando...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4" />
+                        Ejecutar
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
           </div>
-        </>
+        </div>
       )}
 
       {activeTab === 'custom' && (
@@ -1541,8 +1905,8 @@ export default function Analysis() {
           ) : agents.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed">
               <Code className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="font-semibold text-gray-900 mb-2">No tienes agentes personalizados</h3>
-              <p className="text-gray-500 mb-4">Crea tu primer agente o sube un archivo .py</p>
+              <h3 className="font-semibold text-gray-900 mb-2">No tienes agentes</h3>
+              <p className="text-gray-500 mb-4">Crea tu primer agente con código Python</p>
               <button
                 onClick={() => setShowCreateModal(true)}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
@@ -1552,34 +1916,21 @@ export default function Analysis() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {agents.map((agent: Agent) => (
-                <div key={agent.id} className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all">
+              {agents.map((agent: any) => (
+                <div key={agent.id} className="bg-white rounded-xl border p-5 hover:shadow-md transition-all">
                   <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-purple-100 rounded-lg">
-                        <BrainCircuit className="h-5 w-5 text-purple-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900">{agent.name}</h3>
-                        <p className="text-xs text-gray-500">{agent.agent_type}</p>
-                      </div>
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <BrainCircuit className="h-5 w-5 text-purple-600" />
                     </div>
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${
-                      agent.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                    }`}>
+                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
                       {agent.status}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                    {agent.description || 'Sin descripción'}
-                  </p>
+                  <h3 className="font-semibold text-gray-900">{agent.name}</h3>
+                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">{agent.description || 'Sin descripción'}</p>
                   <button
-                    onClick={() => {
-                      setSelectedAgent(agent);
-                      setIsBuiltinAgent(false);
-                    }}
-                    disabled={agent.status !== 'published'}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => setSelectedAgent(agent)}
+                    className="w-full mt-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm flex items-center justify-center gap-2"
                   >
                     <Play className="h-4 w-4" />
                     Ejecutar
@@ -1591,114 +1942,168 @@ export default function Analysis() {
         </>
       )}
 
-      {activeTab === 'executions' && (
-        <>
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-gray-500">
-              {executions.length} ejecuciones
-            </p>
+      {activeTab === 'history' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-500">
+              {localResults.length} análisis locales + {executions.length} ejecuciones backend
+            </span>
             <button
               onClick={() => refetchExecutions()}
-              className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-700"
+              className="text-sm text-purple-600 hover:text-purple-700 flex items-center gap-1"
             >
               <RefreshCw className="h-4 w-4" />
               Actualizar
             </button>
           </div>
 
-          {loadingExecutions ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
-            </div>
-          ) : executions.length === 0 ? (
+          {localResults.length === 0 && executions.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed">
               <History className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="font-semibold text-gray-900 mb-2">Sin ejecuciones</h3>
-              <p className="text-gray-500">Ejecuta un agente para ver el historial aquí</p>
+              <h3 className="font-semibold text-gray-900">Sin historial</h3>
+              <p className="text-gray-500">Ejecuta un análisis para ver resultados aquí</p>
             </div>
           ) : (
             <div className="bg-white rounded-xl border overflow-hidden">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Agente</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Análisis</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Capa</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Estado</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Duración</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Tipo</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Ver</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {executions.map((exec: Execution) => {
-                    const config = getStatusConfig(exec.status);
-                    const StatusIcon = config.icon;
-                    return (
-                      <tr key={exec.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-gray-900">{exec.agent_name || `Agente #${exec.agent}`}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${config.color}`}>
-                            <StatusIcon className={`h-3 w-3 ${exec.status === 'running' ? 'animate-spin' : ''}`} />
-                            {config.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {exec.duration ? `${exec.duration.toFixed(2)}s` : '-'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {new Date(exec.created_at).toLocaleString('es-CO')}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => setSelectedExecution(exec)}
-                            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {/* Resultados locales */}
+                  {localResults.map((result) => (
+                    <tr key={result.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">{result.name}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{result.layerName}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                          result.status === 'completed' ? 'bg-green-100 text-green-700' :
+                          result.status === 'running' ? 'bg-blue-100 text-blue-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {result.status === 'running' && <Loader2 className="h-3 w-3 animate-spin" />}
+                          {result.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">Frontend</span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {result.timestamp.toLocaleString('es-CO')}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => setSelectedLocalResult(result)}
+                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Ejecuciones del backend */}
+                  {executions.map((exec: Execution) => (
+                    <tr key={`exec-${exec.id}`} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {exec.agent_name || `Agente #${exec.agent}`}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{exec.name || '-'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                          exec.status === 'completed' ? 'bg-green-100 text-green-700' :
+                          exec.status === 'running' ? 'bg-blue-100 text-blue-700' :
+                          exec.status === 'failed' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {exec.status === 'running' && <Loader2 className="h-3 w-3 animate-spin" />}
+                          {exec.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded text-xs">Backend</span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {new Date(exec.created_at).toLocaleString('es-CO')}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => setSelectedExecution(exec)}
+                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* Modals */}
+      {showCreateModal && (
+        <CreateAgentModal
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['agents'] })}
+        />
+      )}
+
       {selectedAgent && (
         <ExecuteAgentModal
           agent={selectedAgent}
-          isBuiltin={isBuiltinAgent}
-          onClose={() => {
-            setSelectedAgent(null);
-            setIsBuiltinAgent(false);
-          }}
+          layers={layers}
+          onClose={() => setSelectedAgent(null)}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['executions'] });
-            queryClient.invalidateQueries({ queryKey: ['agents'] });
-            setActiveTab('executions');
+            setActiveTab('history');
           }}
         />
       )}
 
-      {showCreateModal && (
-        <CreateAgentModal
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['agents'] });
-            setActiveTab('custom');
-          }}
+      {selectedLocalResult && (
+        <LocalResultModal
+          result={selectedLocalResult}
+          onClose={() => setSelectedLocalResult(null)}
         />
       )}
 
       {selectedExecution && (
-        <ExecutionDetailModal
-          execution={selectedExecution}
-          onClose={() => setSelectedExecution(null)}
-        />
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50" onClick={() => setSelectedExecution(null)} />
+            <div className="relative bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+              <div className="p-6 border-b flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-900">
+                  {selectedExecution.name || `Ejecución #${selectedExecution.id}`}
+                </h2>
+                <button onClick={() => setSelectedExecution(null)} className="p-2 hover:bg-gray-100 rounded-lg">
+                  <X className="h-5 w-5 text-gray-500" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[60vh]">
+                {selectedExecution.result && (
+                  <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto">
+                    {JSON.stringify(selectedExecution.result, null, 2)}
+                  </pre>
+                )}
+                {selectedExecution.error_message && (
+                  <pre className="bg-red-50 text-red-800 p-4 rounded-lg text-xs border border-red-200">
+                    {selectedExecution.error_message}
+                  </pre>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
