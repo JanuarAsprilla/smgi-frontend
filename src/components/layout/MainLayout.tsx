@@ -2,20 +2,6 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
 import { MapIcon, LayersIcon, BrainCircuitIcon, BellIcon, LayoutDashboardIcon, LogOutIcon, PlayCircle, AlertTriangleIcon, Bot, Users, Map, Database, Settings } from 'lucide-react';
 
-// Banner de modo demo inline
-function DemoBanner() {
-  return (
-    <div className="bg-yellow-50 border-b border-yellow-200">
-      <div className="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8">
-        <p className="text-center text-sm text-yellow-800">
-          <span className="font-semibold">Modo Demo</span> - 
-          Datos de prueba. Para conectar con el backend real, cambia DEMO_MODE a false en los servicios.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default function MainLayout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
@@ -42,7 +28,6 @@ export default function MainLayout() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <DemoBanner />
       <nav className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
