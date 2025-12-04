@@ -1,6 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
-import { MapIcon, LayersIcon, BrainCircuitIcon, BellIcon, LayoutDashboardIcon, LogOutIcon, PlayCircle, AlertTriangleIcon } from 'lucide-react';
+import { MapIcon, LayersIcon, BrainCircuitIcon, BellIcon, LayoutDashboardIcon, LogOutIcon, PlayCircle, AlertTriangleIcon, Bot, Users, Map, Database, Settings } from 'lucide-react';
 
 // Banner de modo demo inline
 function DemoBanner() {
@@ -31,8 +31,13 @@ export default function MainLayout() {
     { name: 'Capas', href: '/layers', icon: LayersIcon },
     { name: 'Procesos', href: '/processes', icon: PlayCircle },
     { name: 'Análisis', href: '/analysis', icon: BrainCircuitIcon },
+    { name: 'Agentes', href: '/agents', icon: Bot },
     { name: 'Monitoreo', href: '/monitoring', icon: BellIcon },
     { name: 'Alertas', href: '/alerts', icon: AlertTriangleIcon },
+    { name: 'Mapa', href: '/map', icon: Map },
+    { name: 'Datos', href: '/data', icon: Database },
+    { name: 'Admin', href: '/admin/users', icon: Users },
+    { name: 'Ajustes', href: '/settings/notifications', icon: Settings },
   ];
 
   return (

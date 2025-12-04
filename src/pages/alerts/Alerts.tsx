@@ -1,322 +1,523 @@
 /**
- * Alerts Page - Sistema de Monitoreo Geoespacial Inteligente
- * Página principal para gestión de alertas del sistema
+ * Alerts Page - Centro de Alertas
+ * SMGI Frontend - Versión 3.0 FUNCIONAL
  * 
- * Compatible con el backend SMGI existente
+ * Módulo para gestión de alertas:
+ * - Ver y gestionar alertas
+ * - Crear reglas de alertas
+ * - Configurar canales de notificación
+ * - Estadísticas y dashboard
  */
 
-import React, { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { alertService } from '../../services';
+import { useToast } from '../../components/ui/Toast';
 import {
   Bell,
+  BellOff,
+  BellRing,
   AlertTriangle,
   AlertCircle,
-  CheckCircle,
+  CheckCircle2,
   Clock,
-  Search,
-  RefreshCw,
   Eye,
-  CheckCheck,
-  XCircle,
-  Zap,
-  Shield,
-  Send,
+  RefreshCw,
+  Plus,
+  X,
+  MoreVertical,
   Mail,
+  MessageSquare,
+  Webhook,
   Smartphone,
-  Globe,
-  TestTube,
-  ChevronLeft,
-  ChevronRight,
+  Send,
+  TrendingUp,
+  BarChart3,
+  Shield,
+  Play,
+  Loader2,
+  Check,
+  Trash2,
+  Edit,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
-import { alertService } from '../../services/alertService';
-import type { Alert, AlertRule, AlertChannel } from '../../types';
 
 // ============================================================================
-// Types - Usando los del backend
+// Types
 // ============================================================================
 
-type AlertSeverity = 'low' | 'medium' | 'high' | 'critical';
-type AlertStatus = 'pending' | 'sent' | 'acknowledged' | 'resolved' | 'failed';
-
-interface AlertFilters {
-  status?: AlertStatus;
-  severity?: AlertSeverity;
+interface Alert {
+  id: number;
   rule?: number;
-  search?: string;
-  ordering?: string;
-  page?: number;
-  page_size?: number;
+  rule_name?: string;
+  title: string;
+  message?: string;
+  notification_type?: 'info' | 'success' | 'warning' | 'error';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'pending' | 'sent' | 'acknowledged' | 'resolved' | 'failed';
+  is_read?: boolean;
+  read_at?: string;
+  metadata?: Record<string, any>;
+  action_url?: string;
+  acknowledged_by?: number;
+  acknowledged_at?: string;
+  resolved_by?: number;
+  resolved_at?: string;
+  resolution_notes?: string;
+  created_at: string;
+  triggered_at?: string;
 }
 
-interface AlertStatistics {
-  total_alerts: number;
-  active_alerts: number;
-  acknowledged_alerts: number;
-  resolved_alerts: number;
-  critical_alerts: number;
-  high_alerts: number;
-  medium_alerts: number;
-  low_alerts: number;
-  alerts_today: number;
-  alerts_this_week?: number;
-  alerts_this_month?: number;
+interface AlertRule {
+  id: number;
+  name: string;
+  description?: string;
+  rule_type: 'threshold' | 'pattern' | 'anomaly' | 'schedule';
+  conditions?: Record<string, any>;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  is_active: boolean;
+  trigger_count?: number;
+  last_triggered?: string;
+  channels?: number[];
+  created_at: string;
+}
+
+interface AlertChannel {
+  id: number;
+  name: string;
+  description?: string;
+  channel_type: 'email' | 'sms' | 'webhook' | 'slack' | 'telegram';
+  configuration?: Record<string, any>;
+  is_active: boolean;
+  created_at: string;
 }
 
 // ============================================================================
-// Utility Functions
+// Stats Card
 // ============================================================================
 
-const getSeverityConfig = (severity: AlertSeverity) => {
-  const configs = {
-    critical: {
-      bg: 'bg-red-100',
-      border: 'border-red-500',
-      text: 'text-red-800',
-      badge: 'bg-red-500 text-white',
-      icon: AlertCircle,
-      pulse: 'animate-pulse',
-    },
-    high: {
-      bg: 'bg-orange-100',
-      border: 'border-orange-500',
-      text: 'text-orange-800',
-      badge: 'bg-orange-500 text-white',
-      icon: AlertTriangle,
-      pulse: '',
-    },
-    medium: {
-      bg: 'bg-yellow-100',
-      border: 'border-yellow-500',
-      text: 'text-yellow-800',
-      badge: 'bg-yellow-500 text-white',
-      icon: Bell,
-      pulse: '',
-    },
-    low: {
-      bg: 'bg-blue-100',
-      border: 'border-blue-500',
-      text: 'text-blue-800',
-      badge: 'bg-blue-500 text-white',
-      icon: Bell,
-      pulse: '',
-    },
-  };
-  return configs[severity] || configs.low;
-};
+interface StatsCardProps {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  icon: React.ElementType;
+  color: string;
+  onClick?: () => void;
+}
 
-const getStatusConfig = (status: AlertStatus) => {
-  const configs = {
-    pending: { bg: 'bg-red-100', text: 'text-red-700', label: 'Pendiente' },
-    sent: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Enviada' },
-    acknowledged: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Reconocida' },
-    resolved: { bg: 'bg-green-100', text: 'text-green-700', label: 'Resuelta' },
-    failed: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Fallida' },
-  };
-  return configs[status] || configs.pending;
-};
-
-const formatTimeAgo = (dateString: string): string => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (seconds < 60) return 'Hace un momento';
-  if (seconds < 3600) return `Hace ${Math.floor(seconds / 60)} min`;
-  if (seconds < 86400) return `Hace ${Math.floor(seconds / 3600)} horas`;
-  if (seconds < 604800) return `Hace ${Math.floor(seconds / 86400)} días`;
-  return date.toLocaleDateString('es-ES');
-};
+const StatsCard: React.FC<StatsCardProps> = ({ title, value, subtitle, icon: Icon, color, onClick }) => (
+  <div 
+    className={`bg-white rounded-xl border p-5 hover:shadow-md transition-all ${onClick ? 'cursor-pointer' : ''}`}
+    onClick={onClick}
+  >
+    <div className="flex items-start justify-between">
+      <div>
+        <p className="text-sm text-gray-500 font-medium">{title}</p>
+        <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+        {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+      </div>
+      <div className={`p-3 rounded-xl bg-linear-to-br ${color}`}>
+        <Icon className="h-6 w-6 text-white" />
+      </div>
+    </div>
+  </div>
+);
 
 // ============================================================================
-// Alert Detail Modal Component
+// Alert Card
 // ============================================================================
 
-interface AlertDetailModalProps {
-  alert: Alert | null;
-  isOpen: boolean;
-  onClose: () => void;
+interface AlertCardProps {
+  alert: Alert;
   onAcknowledge: (id: number) => void;
-  onResolve: (id: number, notes: string) => void;
+  onResolve: (alert: Alert) => void;
+  onView: (alert: Alert) => void;
+  isAcknowledging?: boolean;
 }
 
-const AlertDetailModal: React.FC<AlertDetailModalProps> = ({
-  alert,
-  isOpen,
-  onClose,
-  onAcknowledge,
-  onResolve,
-}) => {
-  const [resolutionNotes, setResolutionNotes] = useState('');
-  const [showResolveForm, setShowResolveForm] = useState(false);
+const AlertCard: React.FC<AlertCardProps> = ({ alert, onAcknowledge, onResolve, onView, isAcknowledging }) => {
+  const severityConfig: Record<string, { bg: string; text: string; border: string; icon: React.ElementType }> = {
+    low: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', icon: AlertCircle },
+    medium: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', icon: AlertTriangle },
+    high: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', icon: AlertTriangle },
+    critical: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: BellRing },
+  };
 
-  if (!isOpen || !alert) return null;
+  const statusConfig: Record<string, { color: string; label: string }> = {
+    pending: { color: 'bg-yellow-100 text-yellow-700', label: 'Pendiente' },
+    sent: { color: 'bg-blue-100 text-blue-700', label: 'Enviada' },
+    acknowledged: { color: 'bg-purple-100 text-purple-700', label: 'Reconocida' },
+    resolved: { color: 'bg-green-100 text-green-700', label: 'Resuelta' },
+    failed: { color: 'bg-red-100 text-red-700', label: 'Fallida' },
+  };
 
-  const severityConfig = getSeverityConfig(alert.severity as AlertSeverity);
-  const statusConfig = getStatusConfig(alert.status as AlertStatus);
-  const SeverityIcon = severityConfig.icon;
+  const severity = severityConfig[alert.severity];
+  const status = statusConfig[alert.status];
+  const SeverityIcon = severity.icon;
 
-  const handleResolve = () => {
-    onResolve(alert.id, resolutionNotes);
-    setResolutionNotes('');
-    setShowResolveForm(false);
+  return (
+    <div className={`rounded-xl border-2 ${severity.border} ${severity.bg} p-4 hover:shadow-md transition-all`}>
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <SeverityIcon className={`h-5 w-5 ${severity.text}`} />
+          <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${severity.text} bg-white`}>
+            {alert.severity}
+          </span>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${status.color}`}>
+            {status.label}
+          </span>
+        </div>
+        <span className="text-xs text-gray-500">
+          {new Date(alert.created_at).toLocaleString('es-CO')}
+        </span>
+      </div>
+
+      <h4 className="font-semibold text-gray-900 mb-1">{alert.title}</h4>
+      {alert.message && (
+        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{alert.message}</p>
+      )}
+
+      {alert.rule_name && (
+        <p className="text-xs text-gray-500 mb-3 flex items-center gap-1">
+          <Shield className="h-3 w-3" />
+          Regla: {alert.rule_name}
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        {alert.status === 'pending' || alert.status === 'sent' ? (
+          <>
+            <button
+              onClick={() => onAcknowledge(alert.id)}
+              disabled={isAcknowledging}
+              className="flex-1 py-2 px-3 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isAcknowledging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Reconocer
+            </button>
+            <button
+              onClick={() => onResolve(alert)}
+              className="flex-1 py-2 px-3 bg-linear-to-r from-green-500 to-emerald-500 text-white rounded-lg text-sm font-medium hover:from-green-600 hover:to-emerald-600 flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Resolver
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => onView(alert)}
+            className="flex-1 py-2 px-3 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2"
+          >
+            <Eye className="h-4 w-4" />
+            Ver Detalles
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// Rule Card
+// ============================================================================
+
+interface RuleCardProps {
+  rule: AlertRule;
+  onToggle: (id: number, active: boolean) => void;
+  onEdit: (rule: AlertRule) => void;
+  onDelete: (id: number) => void;
+  onTest: (id: number) => void;
+}
+
+const RuleCard: React.FC<RuleCardProps> = ({ rule, onToggle, onEdit, onDelete, onTest }) => {
+  const [showMenu, setShowMenu] = useState(false);
+
+  const typeIcons: Record<string, React.ElementType> = {
+    threshold: BarChart3,
+    pattern: TrendingUp,
+    anomaly: AlertTriangle,
+    schedule: Clock,
+  };
+
+  const TypeIcon = typeIcons[rule.rule_type] || Shield;
+
+  const severityColors: Record<string, string> = {
+    low: 'from-blue-500 to-cyan-500',
+    medium: 'from-yellow-500 to-orange-500',
+    high: 'from-orange-500 to-red-500',
+    critical: 'from-red-500 to-rose-500',
+  };
+
+  return (
+    <div className="bg-white rounded-xl border p-5 hover:shadow-lg transition-all group">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2.5 rounded-xl bg-linear-to-br ${severityColors[rule.severity]}`}>
+            <TypeIcon className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">{rule.name}</h3>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                rule.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+              }`}>
+                {rule.is_active ? 'Activa' : 'Inactiva'}
+              </span>
+              <span className="text-xs text-gray-500 capitalize">{rule.rule_type}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative">
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="p-1.5 hover:bg-gray-100 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <MoreVertical className="h-4 w-4 text-gray-500" />
+          </button>
+          
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+              <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border py-1 z-20">
+                <button
+                  onClick={() => { onEdit(rule); setShowMenu(false); }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Edit className="h-4 w-4" /> Editar
+                </button>
+                <button
+                  onClick={() => { onTest(rule.id); setShowMenu(false); }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Play className="h-4 w-4" /> Probar
+                </button>
+                <hr className="my-1" />
+                <button
+                  onClick={() => { onDelete(rule.id); setShowMenu(false); }}
+                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                >
+                  <Trash2 className="h-4 w-4" /> Eliminar
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {rule.description && (
+        <p className="text-sm text-gray-500 mb-4 line-clamp-2">{rule.description}</p>
+      )}
+
+      <div className="flex items-center justify-between py-3 px-3 bg-gray-50 rounded-lg mb-4">
+        <div className="text-center">
+          <p className="text-lg font-bold text-gray-900">{rule.trigger_count || 0}</p>
+          <p className="text-xs text-gray-500">Disparos</p>
+        </div>
+        <div className="text-center">
+          <p className="text-xs font-medium text-gray-700">
+            {rule.last_triggered 
+              ? new Date(rule.last_triggered).toLocaleDateString('es-CO')
+              : 'Nunca'}
+          </p>
+          <p className="text-xs text-gray-500">Último</p>
+        </div>
+      </div>
+
+      <button
+        onClick={() => onToggle(rule.id, !rule.is_active)}
+        className={`w-full py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 ${
+          rule.is_active
+            ? 'border border-yellow-500 text-yellow-600 hover:bg-yellow-50'
+            : 'bg-linear-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600'
+        }`}
+      >
+        {rule.is_active ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        {rule.is_active ? 'Desactivar' : 'Activar'}
+      </button>
+    </div>
+  );
+};
+
+// ============================================================================
+// Channel Card
+// ============================================================================
+
+interface ChannelCardProps {
+  channel: AlertChannel;
+  onToggle: (id: number, active: boolean) => void;
+  onTest: (id: number) => void;
+  onDelete: (id: number) => void;
+}
+
+const ChannelCard: React.FC<ChannelCardProps> = ({ channel, onToggle, onTest }) => {
+  const channelIcons: Record<string, React.ElementType> = {
+    email: Mail,
+    sms: Smartphone,
+    webhook: Webhook,
+    slack: MessageSquare,
+    telegram: Send,
+  };
+
+  const channelColors: Record<string, string> = {
+    email: 'from-blue-500 to-cyan-500',
+    sms: 'from-green-500 to-emerald-500',
+    webhook: 'from-purple-500 to-indigo-500',
+    slack: 'from-pink-500 to-rose-500',
+    telegram: 'from-cyan-500 to-blue-500',
+  };
+
+  const ChannelIcon = channelIcons[channel.channel_type] || Bell;
+
+  return (
+    <div className="bg-white rounded-xl border p-5 hover:shadow-lg transition-all">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2.5 rounded-xl bg-linear-to-br ${channelColors[channel.channel_type]}`}>
+            <ChannelIcon className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">{channel.name}</h3>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+              channel.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {channel.is_active ? 'Activo' : 'Inactivo'}
+            </span>
+          </div>
+        </div>
+        <span className="text-xs text-gray-500 capitalize">{channel.channel_type}</span>
+      </div>
+
+      {channel.description && (
+        <p className="text-sm text-gray-500 mb-4">{channel.description}</p>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => onTest(channel.id)}
+          className="flex-1 py-2 px-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2"
+        >
+          <Play className="h-4 w-4" />
+          Probar
+        </button>
+        <button
+          onClick={() => onToggle(channel.id, !channel.is_active)}
+          className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 ${
+            channel.is_active
+              ? 'border border-yellow-500 text-yellow-600 hover:bg-yellow-50'
+              : 'bg-green-500 text-white hover:bg-green-600'
+          }`}
+        >
+          {channel.is_active ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+          {channel.is_active ? 'Desactivar' : 'Activar'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// Resolve Alert Modal
+// ============================================================================
+
+interface ResolveAlertModalProps {
+  alert: Alert;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const ResolveAlertModal: React.FC<ResolveAlertModalProps> = ({ alert, onClose, onSuccess }) => {
+  const toast = useToast();
+  const [notes, setNotes] = useState('');
+
+  const resolveMutation = useMutation({
+    mutationFn: () => alertService.resolveAlert(alert.id, { resolution_notes: notes }),
+    onSuccess: () => {
+      toast.success('Alerta resuelta', 'La alerta se ha marcado como resuelta');
+      onSuccess();
+      onClose();
+    },
+    onError: (error: any) => {
+      toast.error('Error', error.response?.data?.detail || 'Error al resolver');
+    },
+  });
+
+  const severityColors: Record<string, string> = {
+    low: 'from-blue-500 to-cyan-500',
+    medium: 'from-yellow-500 to-orange-500',
+    high: 'from-orange-500 to-red-500',
+    critical: 'from-red-500 to-rose-500',
   };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
-          onClick={onClose}
-        />
-
-        <div className="relative w-full max-w-2xl transform rounded-2xl bg-white shadow-2xl transition-all">
-          {/* Header */}
-          <div className={`${severityConfig.bg} rounded-t-2xl p-6 border-b-4 ${severityConfig.border}`}>
-            <div className="flex items-start justify-between">
-              <div className="flex items-start space-x-4">
-                <div className={`p-3 rounded-xl ${severityConfig.badge} ${severityConfig.pulse}`}>
-                  <SeverityIcon className="h-6 w-6" />
+        <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+        
+        <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full">
+          <div className={`bg-linear-to-r ${severityColors[alert.severity]} p-6 rounded-t-2xl`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <CheckCircle2 className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h2 className={`text-xl font-bold ${severityConfig.text}`}>
-                    {(alert as any).title || `Alerta #${alert.id}`}
-                  </h2>
-                  <div className="flex items-center space-x-3 mt-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${severityConfig.badge}`}>
-                      {(alert.severity || 'low').toUpperCase()}
-                    </span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusConfig.bg} ${statusConfig.text}`}>
-                      {statusConfig.label}
-                    </span>
-                  </div>
+                  <h2 className="text-xl font-bold text-white">Resolver Alerta</h2>
+                  <p className="text-white/80 text-sm">Severidad: {alert.severity.toUpperCase()}</p>
                 </div>
               </div>
+              <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg">
+                <X className="h-5 w-5 text-white" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <div>
+              <h4 className="font-semibold text-gray-900">{alert.title}</h4>
+              {alert.message && (
+                <p className="text-sm text-gray-600 mt-1">{alert.message}</p>
+              )}
+            </div>
+
+            <div className="p-3 bg-gray-50 rounded-lg text-sm">
+              <p className="text-gray-500">Creada</p>
+              <p className="font-medium">{new Date(alert.created_at).toLocaleString('es-CO')}</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Notas de Resolución
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                placeholder="Describe cómo se resolvió esta alerta..."
+              />
+            </div>
+
+            <div className="flex gap-3 pt-4">
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                <XCircle className="h-6 w-6 text-gray-600" />
+                Cancelar
               </button>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="p-6 space-y-6">
-            {/* Message */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                Mensaje
-              </h3>
-              <p className="text-gray-800 bg-gray-50 p-4 rounded-lg">
-                {alert.message || 'Sin mensaje adicional'}
-              </p>
-            </div>
-
-            {/* Details Grid */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">ID</h4>
-                <p className="text-gray-800 font-medium">#{alert.id}</p>
-              </div>
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Regla</h4>
-                <p className="text-gray-800 font-medium">{(alert as any).rule_name || 'N/A'}</p>
-              </div>
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Creada</h4>
-                <p className="text-gray-800 font-medium">
-                  {new Date(alert.created_at).toLocaleString('es-ES')}
-                </p>
-              </div>
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Tiempo</h4>
-                <p className="text-gray-800 font-medium">{formatTimeAgo(alert.created_at)}</p>
-              </div>
-            </div>
-
-            {/* Acknowledgement Info */}
-            {(alert as any).acknowledged_at && (
-              <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
-                <h4 className="text-sm font-semibold text-yellow-800 mb-2">✓ Reconocida</h4>
-                <p className="text-sm text-yellow-700">
-                  Por <strong>{(alert as any).acknowledged_by_username || 'Usuario'}</strong> el{' '}
-                  {new Date((alert as any).acknowledged_at).toLocaleString('es-ES')}
-                </p>
-              </div>
-            )}
-
-            {/* Resolution Info */}
-            {(alert as any).resolved_at && (
-              <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
-                <h4 className="text-sm font-semibold text-green-800 mb-2">✓ Resuelta</h4>
-                <p className="text-sm text-green-700">
-                  Por <strong>{(alert as any).resolved_by_username || 'Usuario'}</strong> el{' '}
-                  {new Date((alert as any).resolved_at).toLocaleString('es-ES')}
-                </p>
-                {(alert as any).resolution_notes && (
-                  <p className="text-sm text-green-700 mt-2 bg-green-100 p-2 rounded">
-                    <strong>Notas:</strong> {(alert as any).resolution_notes}
-                  </p>
+              <button
+                onClick={() => resolveMutation.mutate()}
+                disabled={resolveMutation.isPending}
+                className="flex-1 px-4 py-2 bg-linear-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-600 hover:to-emerald-600 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {resolveMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
                 )}
-              </div>
-            )}
-
-            {/* Resolution Form */}
-            {showResolveForm && alert.status !== 'resolved' && (
-              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-                <h4 className="text-sm font-semibold text-gray-700">Notas de Resolución</h4>
-                <textarea
-                  value={resolutionNotes}
-                  onChange={(e) => setResolutionNotes(e.target.value)}
-                  placeholder="Describe cómo se resolvió esta alerta..."
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  rows={3}
-                />
-                <div className="flex justify-end space-x-2">
-                  <button
-                    onClick={() => setShowResolveForm(false)}
-                    className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleResolve}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    Confirmar Resolución
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div className="p-6 bg-gray-50 rounded-b-2xl flex justify-between">
-            <button
-              onClick={onClose}
-              className="px-6 py-2.5 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors font-medium"
-            >
-              Cerrar
-            </button>
-            <div className="flex space-x-3">
-              {(alert.status === 'pending' || alert.status === 'sent') && (
-                <button
-                  onClick={() => onAcknowledge(alert.id)}
-                  className="px-6 py-2.5 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-medium flex items-center space-x-2"
-                >
-                  <CheckCheck className="h-4 w-4" />
-                  <span>Reconocer</span>
-                </button>
-              )}
-              {alert.status !== 'resolved' && (
-                <button
-                  onClick={() => setShowResolveForm(true)}
-                  className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center space-x-2"
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  <span>Resolver</span>
-                </button>
-              )}
+                Resolver Alerta
+              </button>
             </div>
           </div>
         </div>
@@ -326,177 +527,144 @@ const AlertDetailModal: React.FC<AlertDetailModalProps> = ({
 };
 
 // ============================================================================
-// Statistics Cards Component
+// Create Rule Modal
 // ============================================================================
 
-const StatisticsCards: React.FC<{ stats: AlertStatistics | undefined; isLoading: boolean }> = ({
-  stats,
-  isLoading,
-}) => {
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="bg-white rounded-xl p-4 shadow-sm animate-pulse">
-            <div className="h-4 bg-gray-200 rounded w-20 mb-2" />
-            <div className="h-8 bg-gray-200 rounded w-16" />
-          </div>
-        ))}
-      </div>
-    );
-  }
+interface CreateRuleModalProps {
+  onClose: () => void;
+  onSuccess: () => void;
+}
 
-  const cards = [
-    {
-      label: 'Pendientes',
-      value: stats?.active_alerts || stats?.total_alerts || 0,
-      icon: AlertTriangle,
-      color: 'text-red-600',
-      bg: 'bg-red-50',
-      border: 'border-red-200',
+const CreateRuleModal: React.FC<CreateRuleModalProps> = ({ onClose, onSuccess }) => {
+  const toast = useToast();
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    rule_type: 'threshold' as 'threshold' | 'pattern' | 'anomaly' | 'schedule',
+    severity: 'medium' as 'low' | 'medium' | 'high' | 'critical',
+    conditions: {},
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => alertService.createRule({
+      ...formData,
+      channels: [],
+    }),
+    onSuccess: () => {
+      toast.success('Regla creada', 'La regla de alerta se ha creado correctamente');
+      onSuccess();
+      onClose();
     },
-    {
-      label: 'Críticas',
-      value: stats?.critical_alerts || 0,
-      icon: Zap,
-      color: 'text-purple-600',
-      bg: 'bg-purple-50',
-      border: 'border-purple-200',
+    onError: (error: any) => {
+      toast.error('Error', error.response?.data?.detail || 'Error al crear regla');
     },
-    {
-      label: 'Hoy',
-      value: stats?.alerts_today || 0,
-      icon: Clock,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
-      border: 'border-blue-200',
-    },
-    {
-      label: 'Resueltas',
-      value: stats?.resolved_alerts || 0,
-      icon: CheckCircle,
-      color: 'text-green-600',
-      bg: 'bg-green-50',
-      border: 'border-green-200',
-    },
-  ];
+  });
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      {cards.map((card, index) => {
-        const Icon = card.icon;
-        return (
-          <div
-            key={index}
-            className={`${card.bg} ${card.border} border rounded-xl p-4 transition-all hover:shadow-md`}
-          >
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+        
+        <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full">
+          <div className="bg-linear-to-r from-orange-500 to-red-500 p-6 rounded-t-2xl">
             <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <Shield className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">Nueva Regla</h2>
+                  <p className="text-orange-100 text-sm">Configura una regla de alerta</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg">
+                <X className="h-5 w-5 text-white" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nombre <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                placeholder="Alerta de umbral crítico"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Descripción
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                rows={2}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                placeholder="Describe cuándo debe dispararse esta regla..."
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-gray-600 font-medium">{card.label}</p>
-                <p className={`text-3xl font-bold ${card.color}`}>{card.value}</p>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo de Regla
+                </label>
+                <select
+                  value={formData.rule_type}
+                  onChange={(e) => setFormData({ ...formData, rule_type: e.target.value as any })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="threshold">Umbral</option>
+                  <option value="pattern">Patrón</option>
+                  <option value="anomaly">Anomalía</option>
+                  <option value="schedule">Programada</option>
+                </select>
               </div>
-              <div className={`p-3 rounded-lg ${card.bg}`}>
-                <Icon className={`h-6 w-6 ${card.color}`} />
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Severidad
+                </label>
+                <select
+                  value={formData.severity}
+                  onChange={(e) => setFormData({ ...formData, severity: e.target.value as any })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="low">Baja</option>
+                  <option value="medium">Media</option>
+                  <option value="high">Alta</option>
+                  <option value="critical">Crítica</option>
+                </select>
               </div>
             </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
 
-// ============================================================================
-// Alert Card Component
-// ============================================================================
-
-const AlertCard: React.FC<{
-  alert: Alert;
-  onView: (alert: Alert) => void;
-  onAcknowledge: (id: number) => void;
-  onResolve: (id: number) => void;
-  isSelected: boolean;
-  onSelect: (id: number) => void;
-}> = ({ alert, onView, onAcknowledge, onResolve, isSelected, onSelect }) => {
-  const severityConfig = getSeverityConfig(alert.severity as AlertSeverity);
-  const statusConfig = getStatusConfig(alert.status as AlertStatus);
-  const SeverityIcon = severityConfig.icon;
-
-  return (
-    <div
-      className={`bg-white rounded-xl shadow-sm border-l-4 ${severityConfig.border} 
-        hover:shadow-lg transition-all duration-200 ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
-    >
-      <div className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="flex items-start space-x-3 flex-1">
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={() => onSelect(alert.id)}
-              className="mt-1 h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
-            />
-
-            <div className={`p-2 rounded-lg ${severityConfig.bg} ${severityConfig.pulse}`}>
-              <SeverityIcon className={`h-5 w-5 ${severityConfig.text}`} />
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center space-x-2 mb-1">
-                <h3 className="font-semibold text-gray-900 truncate">
-                  {(alert as any).title || `Alerta #${alert.id}`}
-                </h3>
-                {alert.severity === 'critical' && (
-                  <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full animate-pulse">
-                    CRÍTICA
-                  </span>
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => createMutation.mutate()}
+                disabled={!formData.name || createMutation.isPending}
+                className="flex-1 px-4 py-2 bg-linear-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {createMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
                 )}
-              </div>
-              <p className="text-sm text-gray-600 line-clamp-2 mb-2">
-                {alert.message || 'Sin mensaje'}
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${severityConfig.badge}`}>
-                  {(alert.severity || 'low').toUpperCase()}
-                </span>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}>
-                  {statusConfig.label}
-                </span>
-                <span className="text-xs text-gray-500 flex items-center">
-                  <Clock className="h-3 w-3 mr-1" />
-                  {formatTimeAgo(alert.created_at)}
-                </span>
-              </div>
+                Crear Regla
+              </button>
             </div>
           </div>
-
-          <div className="flex items-center space-x-1 ml-2">
-            <button
-              onClick={() => onView(alert)}
-              className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Ver detalles"
-            >
-              <Eye className="h-4 w-4" />
-            </button>
-            {(alert.status === 'pending' || alert.status === 'sent') && (
-              <button
-                onClick={() => onAcknowledge(alert.id)}
-                className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
-                title="Reconocer"
-              >
-                <CheckCheck className="h-4 w-4" />
-              </button>
-            )}
-            {alert.status !== 'resolved' && (
-              <button
-                onClick={() => onResolve(alert.id)}
-                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                title="Resolver"
-              >
-                <CheckCircle className="h-4 w-4" />
-              </button>
-            )}
-          </div>
         </div>
       </div>
     </div>
@@ -504,650 +672,353 @@ const AlertCard: React.FC<{
 };
 
 // ============================================================================
-// Alert Rules Section Component
+// Main Component
 // ============================================================================
 
-const AlertRulesSection: React.FC<{ rules: AlertRule[]; isLoading: boolean }> = ({
-  rules,
-  isLoading,
-}) => {
+export default function Alerts() {
   const queryClient = useQueryClient();
+  const toast = useToast();
 
-  const toggleMutation = useMutation({
-    mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
-      alertService.toggleRuleStatus(id, isActive),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
-    },
+  // State
+  const [activeTab, setActiveTab] = useState<'alerts' | 'rules' | 'channels'>('alerts');
+  const [severityFilter, setSeverityFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [showCreateRuleModal, setShowCreateRuleModal] = useState(false);
+  const [alertToResolve, setAlertToResolve] = useState<Alert | null>(null);
+  const [acknowledgingAlert, setAcknowledgingAlert] = useState<number | null>(null);
+
+  // Queries
+  const { data: alertsData, isLoading: loadingAlerts, refetch: refetchAlerts } = useQuery({
+    queryKey: ['alerts', severityFilter, statusFilter],
+    queryFn: () => alertService.getAlerts({
+      severity: severityFilter as any || undefined,
+      status: statusFilter as any || undefined,
+      ordering: '-created_at',
+    }),
+    refetchInterval: 30000,
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => alertService.deleteRule(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
-    },
+  const { data: rulesData, isLoading: loadingRules } = useQuery({
+    queryKey: ['alert-rules'],
+    queryFn: () => alertService.getRules(),
   });
 
-  const testMutation = useMutation({
-    mutationFn: (id: number) => alertService.testRule(id),
-    onSuccess: (data) => {
-      alert(`Prueba completada: ${data.message}`);
-    },
-  });
-
-  const getRuleTypeLabel = (type: string) => {
-    const types: Record<string, string> = {
-      threshold: 'Umbral',
-      pattern: 'Patrón',
-      anomaly: 'Anomalía',
-      schedule: 'Programada',
-    };
-    return types[type] || type;
-  };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="bg-white rounded-xl p-6 shadow-sm animate-pulse">
-            <div className="h-5 bg-gray-200 rounded w-1/4 mb-3" />
-            <div className="h-4 bg-gray-200 rounded w-1/2" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Reglas de Alertas</h2>
-          <p className="text-sm text-gray-500">
-            Configura las condiciones que disparan alertas automáticas
-          </p>
-        </div>
-        <button className="flex items-center space-x-2 px-4 py-2.5 bg-linear-to-r from-red-500 to-orange-500 text-white rounded-lg hover:from-red-600 hover:to-orange-600 transition-all shadow-lg">
-          <Zap className="h-4 w-4" />
-          <span>Nueva Regla</span>
-        </button>
-      </div>
-
-      {rules.length === 0 ? (
-        <div className="bg-white rounded-xl p-12 text-center shadow-sm">
-          <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <Shield className="h-8 w-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            No hay reglas configuradas
-          </h3>
-          <p className="text-gray-500 mb-4">
-            Crea tu primera regla para empezar a recibir alertas automáticas.
-          </p>
-          <button className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
-            Crear primera regla
-          </button>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {rules.map((rule) => {
-            const severityConfig = getSeverityConfig(rule.severity as AlertSeverity);
-            return (
-              <div
-                key={rule.id}
-                className={`bg-white rounded-xl shadow-sm border-l-4 ${severityConfig.border} overflow-hidden`}
-              >
-                <div className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <h3 className="font-semibold text-gray-900">{rule.name}</h3>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                            rule.is_active
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}
-                        >
-                          {rule.is_active ? 'Activa' : 'Inactiva'}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                        {rule.description || 'Sin descripción'}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${severityConfig.badge}`}>
-                          {(rule.severity || 'low').toUpperCase()}
-                        </span>
-                        <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium">
-                          {getRuleTypeLabel(rule.rule_type)}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => toggleMutation.mutate({ id: rule.id, isActive: !rule.is_active })}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        rule.is_active ? 'bg-green-500' : 'bg-gray-300'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          rule.is_active ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-                <div className="px-5 py-3 bg-gray-50 flex items-center justify-between">
-                  <span className="text-xs text-gray-500">
-                    Creada: {new Date(rule.created_at).toLocaleDateString('es-ES')}
-                  </span>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => testMutation.mutate(rule.id)}
-                      className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-colors"
-                      title="Probar regla"
-                    >
-                      <TestTube className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm('¿Estás seguro de eliminar esta regla?')) {
-                          deleteMutation.mutate(rule.id);
-                        }
-                      }}
-                      className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
-                      title="Eliminar"
-                    >
-                      <XCircle className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ============================================================================
-// Alert Channels Section Component
-// ============================================================================
-
-const AlertChannelsSection: React.FC = () => {
-  const { data: channelsData, isLoading } = useQuery({
+  const { data: channelsData, isLoading: loadingChannels } = useQuery({
     queryKey: ['alert-channels'],
     queryFn: () => alertService.getChannels(),
   });
 
-  const testMutation = useMutation({
-    mutationFn: (id: number) => alertService.testChannel(id),
-    onSuccess: (data) => {
-      alert(data.success ? '✅ Canal probado exitosamente' : '❌ Error al probar el canal');
-    },
+  const { data: statsData } = useQuery({
+    queryKey: ['alert-stats'],
+    queryFn: () => alertService.getStatistics(),
   });
 
-  const getChannelIcon = (type: string) => {
-    const icons: Record<string, React.ElementType> = {
-      email: Mail,
-      sms: Smartphone,
-      webhook: Globe,
-      slack: Send,
-      telegram: Send,
-    };
-    return icons[type] || Send;
-  };
-
-  if (isLoading) {
-    return (
-      <div className="grid gap-4 md:grid-cols-3">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="bg-white rounded-xl p-6 shadow-sm animate-pulse">
-            <div className="h-10 w-10 bg-gray-200 rounded-lg mb-3" />
-            <div className="h-5 bg-gray-200 rounded w-1/2 mb-2" />
-            <div className="h-4 bg-gray-200 rounded w-3/4" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
+  const alerts = alertsData?.results || [];
+  const rules = rulesData?.results || [];
   const channels = channelsData?.results || [];
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Canales de Notificación</h2>
-          <p className="text-sm text-gray-500">Configura cómo recibir las alertas</p>
-        </div>
-      </div>
-
-      {channels.length === 0 ? (
-        <div className="bg-white rounded-xl p-12 text-center shadow-sm">
-          <Send className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            No hay canales configurados
-          </h3>
-          <p className="text-gray-500">
-            Configura canales para recibir notificaciones de alertas.
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-3">
-          {channels.map((channel: AlertChannel) => {
-            const Icon = getChannelIcon(channel.channel_type);
-            return (
-              <div key={channel.id} className="bg-white rounded-xl shadow-sm p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <div className={`p-3 rounded-lg ${channel.is_active ? 'bg-green-100' : 'bg-gray-100'}`}>
-                    <Icon className={`h-6 w-6 ${channel.is_active ? 'text-green-600' : 'text-gray-500'}`} />
-                  </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    channel.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {channel.is_active ? 'Activo' : 'Inactivo'}
-                  </span>
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-1">{channel.name}</h3>
-                <p className="text-sm text-gray-500 mb-3 capitalize">{channel.channel_type}</p>
-                <button
-                  onClick={() => testMutation.mutate(channel.id)}
-                  disabled={!channel.is_active || testMutation.isPending}
-                  className="w-full py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
-                >
-                  {testMutation.isPending ? 'Probando...' : 'Probar canal'}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ============================================================================
-// Main Alerts Page Component
-// ============================================================================
-
-const Alerts: React.FC = () => {
-  const queryClient = useQueryClient();
-  
-  // State
-  const [filters, setFilters] = useState<AlertFilters>({
-    ordering: '-created_at',
-    page: 1,
-    page_size: 10,
-  });
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [selectedAlerts, setSelectedAlerts] = useState<number[]>([]);
-  const [activeTab, setActiveTab] = useState<'alerts' | 'rules' | 'channels'>('alerts');
-
-  // Queries
-  const { data: alertsData, isLoading: isLoadingAlerts, refetch: refetchAlerts } = useQuery({
-    queryKey: ['alerts', filters],
-    queryFn: () => alertService.getAlerts(filters),
-    refetchInterval: 30000,
-  });
-
-  const { data: dashboardData, isLoading: isLoadingStats } = useQuery({
-    queryKey: ['alert-dashboard'],
-    queryFn: () => alertService.getDashboard(),
-    refetchInterval: 60000,
-  });
-
-  const { data: rulesData, isLoading: isLoadingRules } = useQuery({
-    queryKey: ['alert-rules'],
-    queryFn: () => alertService.getRules(),
-    enabled: activeTab === 'rules',
-  });
 
   // Mutations
   const acknowledgeMutation = useMutation({
     mutationFn: (id: number) => alertService.acknowledgeAlert(id),
     onSuccess: () => {
+      toast.success('Alerta reconocida', 'La alerta ha sido reconocida');
       queryClient.invalidateQueries({ queryKey: ['alerts'] });
-      queryClient.invalidateQueries({ queryKey: ['alert-dashboard'] });
+      setAcknowledgingAlert(null);
+    },
+    onError: (error: any) => {
+      toast.error('Error', error.response?.data?.detail || 'Error al reconocer');
+      setAcknowledgingAlert(null);
     },
   });
 
-  const resolveMutation = useMutation({
-    mutationFn: ({ id, notes }: { id: number; notes: string }) =>
-      alertService.resolveAlert(id, { resolution_notes: notes }),
+  const toggleRuleMutation = useMutation({
+    mutationFn: ({ id, active }: { id: number; active: boolean }) =>
+      active ? alertService.enableRule(id) : alertService.disableRule(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alerts'] });
-      queryClient.invalidateQueries({ queryKey: ['alert-dashboard'] });
-      setShowDetailModal(false);
+      toast.success('Regla actualizada');
+      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
     },
   });
 
-  // Handlers
-  const handleSearch = useCallback(() => {
-    setFilters((prev) => ({ ...prev, search: searchTerm, page: 1 }));
-  }, [searchTerm]);
+  const testRuleMutation = useMutation({
+    mutationFn: (id: number) => alertService.testRule(id),
+    onSuccess: (data) => {
+      toast.success('Prueba completada', data.message);
+    },
+    onError: (error: any) => {
+      toast.error('Error', error.response?.data?.detail || 'Error al probar regla');
+    },
+  });
 
-  const handleFilterChange = (key: keyof AlertFilters, value: string | undefined) => {
-    setFilters((prev) => ({ ...prev, [key]: value || undefined, page: 1 }));
+  const deleteRuleMutation = useMutation({
+    mutationFn: (id: number) => alertService.deleteRule(id),
+    onSuccess: () => {
+      toast.success('Regla eliminada');
+      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
+    },
+  });
+
+  const testChannelMutation = useMutation({
+    mutationFn: (id: number) => alertService.testChannel(id),
+    onSuccess: (data) => {
+      toast.success('Prueba enviada', data.message);
+    },
+    onError: (error: any) => {
+      toast.error('Error', error.response?.data?.detail || 'Error al probar canal');
+    },
+  });
+
+  // Stats
+  const stats = {
+    totalAlerts: statsData?.total_alerts || alerts.length,
+    pendingAlerts: statsData?.active_alerts || alerts.filter(a => a.status === 'pending').length,
+    criticalAlerts: statsData?.critical_alerts || alerts.filter(a => a.severity === 'critical').length,
+    activeRules: rules.filter((r: AlertRule) => r.is_active).length,
   };
-
-  const handleViewAlert = (alert: Alert) => {
-    setSelectedAlert(alert);
-    setShowDetailModal(true);
-  };
-
-  const handleAcknowledge = (id: number) => {
-    acknowledgeMutation.mutate(id);
-  };
-
-  const handleResolve = (id: number, notes: string = '') => {
-    resolveMutation.mutate({ id, notes });
-  };
-
-  const handleSelectAlert = (id: number) => {
-    setSelectedAlerts((prev) =>
-      prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAll = () => {
-    if (alertsData?.results) {
-      if (selectedAlerts.length === alertsData.results.length) {
-        setSelectedAlerts([]);
-      } else {
-        setSelectedAlerts(alertsData.results.map((a) => a.id));
-      }
-    }
-  };
-
-  const handleBulkAcknowledge = async () => {
-    for (const id of selectedAlerts) {
-      await acknowledgeMutation.mutateAsync(id);
-    }
-    setSelectedAlerts([]);
-  };
-
-  const handleBulkResolve = async () => {
-    for (const id of selectedAlerts) {
-      await resolveMutation.mutateAsync({ id, notes: 'Resuelto en lote' });
-    }
-    setSelectedAlerts([]);
-  };
-
-  const handlePageChange = (newPage: number) => {
-    setFilters((prev) => ({ ...prev, page: newPage }));
-  };
-
-  // Calculate pagination
-  const totalPages = alertsData ? Math.ceil(alertsData.count / (filters.page_size || 10)) : 0;
-
-  // Get statistics from dashboard
-  const statistics: AlertStatistics | undefined = dashboardData?.statistics;
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-slate-100">
+    <div className="min-h-screen bg-gray-50 p-6">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-linear-to-br from-red-500 to-orange-500 rounded-xl shadow-lg">
-                  <Bell className="h-8 w-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">Centro de Alertas</h1>
-                  <p className="text-sm text-gray-500">
-                    Monitorea y gestiona las alertas del sistema
-                  </p>
-                </div>
+      <div className="mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+              <div className="p-2 bg-linear-to-br from-orange-500 to-red-500 rounded-xl text-white">
+                <Bell className="h-6 w-6" />
               </div>
-              <button
-                onClick={() => refetchAlerts()}
-                className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Actualizar"
-              >
-                <RefreshCw className={`h-5 w-5 ${isLoadingAlerts ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex space-x-1 mt-4 bg-gray-100 p-1 rounded-lg w-fit">
-              <button
-                onClick={() => setActiveTab('alerts')}
-                className={`px-4 py-2 rounded-md font-medium text-sm transition-all ${
-                  activeTab === 'alerts'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <span className="flex items-center space-x-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span>Alertas</span>
-                  {statistics?.active_alerts ? (
-                    <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
-                      {statistics.active_alerts}
-                    </span>
-                  ) : null}
-                </span>
-              </button>
-              <button
-                onClick={() => setActiveTab('rules')}
-                className={`px-4 py-2 rounded-md font-medium text-sm transition-all ${
-                  activeTab === 'rules'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <span className="flex items-center space-x-2">
-                  <Shield className="h-4 w-4" />
-                  <span>Reglas</span>
-                </span>
-              </button>
-              <button
-                onClick={() => setActiveTab('channels')}
-                className={`px-4 py-2 rounded-md font-medium text-sm transition-all ${
-                  activeTab === 'channels'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <span className="flex items-center space-x-2">
-                  <Send className="h-4 w-4" />
-                  <span>Canales</span>
-                </span>
-              </button>
-            </div>
+              Centro de Alertas
+            </h1>
+            <p className="text-gray-500 mt-1">
+              Gestiona alertas y configura reglas de notificación
+            </p>
           </div>
+
+          <button
+            onClick={() => setShowCreateRuleModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-linear-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 shadow-lg"
+          >
+            <Plus className="h-4 w-4" />
+            Nueva Regla
+          </button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'alerts' && (
-          <>
-            {/* Statistics */}
-            <StatisticsCards stats={statistics} isLoading={isLoadingStats} />
-
-            {/* Filters and Search */}
-            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div className="relative flex-1 max-w-md">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar alertas..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={filters.severity || ''}
-                    onChange={(e) => handleFilterChange('severity', e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-                  >
-                    <option value="">Todas las severidades</option>
-                    <option value="critical">Crítica</option>
-                    <option value="high">Alta</option>
-                    <option value="medium">Media</option>
-                    <option value="low">Baja</option>
-                  </select>
-
-                  <select
-                    value={filters.status || ''}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-                  >
-                    <option value="">Todos los estados</option>
-                    <option value="pending">Pendientes</option>
-                    <option value="sent">Enviadas</option>
-                    <option value="acknowledged">Reconocidas</option>
-                    <option value="resolved">Resueltas</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Bulk Actions */}
-              {selectedAlerts.length > 0 && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg flex items-center justify-between">
-                  <span className="text-sm text-blue-700 font-medium">
-                    {selectedAlerts.length} alerta(s) seleccionada(s)
-                  </span>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={handleBulkAcknowledge}
-                      className="px-3 py-1.5 bg-yellow-500 text-white text-sm rounded-lg hover:bg-yellow-600 transition-colors"
-                    >
-                      Reconocer todas
-                    </button>
-                    <button
-                      onClick={handleBulkResolve}
-                      className="px-3 py-1.5 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors"
-                    >
-                      Resolver todas
-                    </button>
-                    <button
-                      onClick={() => setSelectedAlerts([])}
-                      className="px-3 py-1.5 text-gray-600 text-sm hover:bg-gray-200 rounded-lg transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Alert List */}
-            <div className="space-y-3">
-              {isLoadingAlerts ? (
-                [...Array(5)].map((_, i) => (
-                  <div key={i} className="bg-white rounded-xl p-4 shadow-sm animate-pulse">
-                    <div className="flex items-start space-x-3">
-                      <div className="w-10 h-10 bg-gray-200 rounded-lg" />
-                      <div className="flex-1">
-                        <div className="h-4 bg-gray-200 rounded w-1/3 mb-2" />
-                        <div className="h-3 bg-gray-200 rounded w-2/3 mb-2" />
-                        <div className="h-3 bg-gray-200 rounded w-1/4" />
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : alertsData?.results.length === 0 ? (
-                <div className="bg-white rounded-xl p-12 text-center shadow-sm">
-                  <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                    <CheckCircle className="h-8 w-8 text-green-500" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    ¡Todo en orden!
-                  </h3>
-                  <p className="text-gray-500">
-                    No hay alertas que coincidan con los filtros seleccionados.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center space-x-3 px-4 py-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedAlerts.length === alertsData?.results.length}
-                      onChange={handleSelectAll}
-                      className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-600">Seleccionar todas</span>
-                  </div>
-
-                  {alertsData?.results.map((alert) => (
-                    <AlertCard
-                      key={alert.id}
-                      alert={alert}
-                      onView={handleViewAlert}
-                      onAcknowledge={handleAcknowledge}
-                      onResolve={(id) => handleResolve(id)}
-                      isSelected={selectedAlerts.includes(alert.id)}
-                      onSelect={handleSelectAlert}
-                    />
-                  ))}
-                </>
-              )}
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-between bg-white rounded-xl p-4 shadow-sm">
-                <p className="text-sm text-gray-600">
-                  Mostrando {((filters.page || 1) - 1) * (filters.page_size || 10) + 1} -{' '}
-                  {Math.min((filters.page || 1) * (filters.page_size || 10), alertsData?.count || 0)} de{' '}
-                  {alertsData?.count || 0} alertas
-                </p>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handlePageChange((filters.page || 1) - 1)}
-                    disabled={(filters.page || 1) <= 1}
-                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <span className="px-4 py-2 text-sm font-medium">
-                    Página {filters.page || 1} de {totalPages}
-                  </span>
-                  <button
-                    onClick={() => handlePageChange((filters.page || 1) + 1)}
-                    disabled={(filters.page || 1) >= totalPages}
-                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {activeTab === 'rules' && (
-          <AlertRulesSection rules={rulesData?.results || []} isLoading={isLoadingRules} />
-        )}
-
-        {activeTab === 'channels' && <AlertChannelsSection />}
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatsCard
+          title="Total Alertas"
+          value={stats.totalAlerts}
+          icon={Bell}
+          color="from-blue-500 to-cyan-500"
+        />
+        <StatsCard
+          title="Pendientes"
+          value={stats.pendingAlerts}
+          subtitle="Requieren atención"
+          icon={Clock}
+          color="from-yellow-500 to-orange-500"
+          onClick={() => setStatusFilter('pending')}
+        />
+        <StatsCard
+          title="Críticas"
+          value={stats.criticalAlerts}
+          subtitle="Alta prioridad"
+          icon={AlertTriangle}
+          color="from-red-500 to-rose-500"
+          onClick={() => setSeverityFilter('critical')}
+        />
+        <StatsCard
+          title="Reglas Activas"
+          value={stats.activeRules}
+          icon={Shield}
+          color="from-green-500 to-emerald-500"
+          onClick={() => setActiveTab('rules')}
+        />
       </div>
 
-      {/* Detail Modal */}
-      <AlertDetailModal
-        alert={selectedAlert}
-        isOpen={showDetailModal}
-        onClose={() => setShowDetailModal(false)}
-        onAcknowledge={handleAcknowledge}
-        onResolve={handleResolve}
-      />
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6">
+        {[
+          { id: 'alerts', label: 'Alertas', icon: Bell, count: alerts.length },
+          { id: 'rules', label: 'Reglas', icon: Shield, count: rules.length },
+          { id: 'channels', label: 'Canales', icon: Send, count: channels.length },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                isActive
+                  ? 'bg-linear-to-r from-orange-500 to-red-500 text-white shadow-lg'
+                  : 'bg-white text-gray-700 hover:bg-gray-100 border'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {tab.label}
+              {tab.count !== undefined && (
+                <span className={`px-1.5 py-0.5 rounded-full text-xs ${isActive ? 'bg-white/20' : 'bg-gray-200'}`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content */}
+      {activeTab === 'alerts' && (
+        <>
+          {/* Filters */}
+          <div className="bg-white rounded-xl border p-4 mb-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <select
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="">Todas las severidades</option>
+                <option value="critical">Crítica</option>
+                <option value="high">Alta</option>
+                <option value="medium">Media</option>
+                <option value="low">Baja</option>
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="">Todos los estados</option>
+                <option value="pending">Pendiente</option>
+                <option value="acknowledged">Reconocida</option>
+                <option value="resolved">Resuelta</option>
+              </select>
+              <button
+                onClick={() => refetchAlerts()}
+                className="px-4 py-2 text-orange-600 hover:bg-orange-50 rounded-lg flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Actualizar
+              </button>
+            </div>
+          </div>
+
+          {loadingAlerts ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+            </div>
+          ) : alerts.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed">
+              <CheckCircle2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="font-semibold text-gray-900 mb-2">Sin alertas</h3>
+              <p className="text-gray-500">No hay alertas que coincidan con los filtros</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {alerts.map((alert: Alert) => (
+                <AlertCard
+                  key={alert.id}
+                  alert={alert}
+                  onAcknowledge={(id) => {
+                    setAcknowledgingAlert(id);
+                    acknowledgeMutation.mutate(id);
+                  }}
+                  onResolve={setAlertToResolve}
+                  onView={() => {}}
+                  isAcknowledging={acknowledgingAlert === alert.id}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === 'rules' && (
+        <>
+          {loadingRules ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+            </div>
+          ) : rules.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed">
+              <Shield className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="font-semibold text-gray-900 mb-2">Sin reglas</h3>
+              <p className="text-gray-500 mb-4">Crea tu primera regla de alerta</p>
+              <button
+                onClick={() => setShowCreateRuleModal(true)}
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+              >
+                Crear Regla
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {rules.map((rule: AlertRule) => (
+                <RuleCard
+                  key={rule.id}
+                  rule={rule}
+                  onToggle={(id, active) => toggleRuleMutation.mutate({ id, active })}
+                  onEdit={() => {}}
+                  onDelete={(id) => {
+                    if (confirm('¿Estás seguro de eliminar esta regla?')) {
+                      deleteRuleMutation.mutate(id);
+                    }
+                  }}
+                  onTest={(id) => testRuleMutation.mutate(id)}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === 'channels' && (
+        <>
+          {loadingChannels ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+            </div>
+          ) : channels.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed">
+              <Send className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="font-semibold text-gray-900 mb-2">Sin canales</h3>
+              <p className="text-gray-500 mb-4">Configura canales para recibir alertas</p>
+              <p className="text-sm text-orange-600">
+                Próximamente: Crear canales de notificación
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {channels.map((channel: AlertChannel) => (
+                <ChannelCard
+                  key={channel.id}
+                  channel={channel}
+                  onToggle={() => {}}
+                  onTest={(id) => testChannelMutation.mutate(id)}
+                  onDelete={() => {}}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Modals */}
+      {showCreateRuleModal && (
+        <CreateRuleModal
+          onClose={() => setShowCreateRuleModal(false)}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['alert-rules'] })}
+        />
+      )}
+
+      {alertToResolve && (
+        <ResolveAlertModal
+          alert={alertToResolve}
+          onClose={() => setAlertToResolve(null)}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['alerts'] })}
+        />
+      )}
     </div>
   );
-};
-
-export default Alerts;
+}
