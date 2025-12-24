@@ -100,24 +100,7 @@ export default function Register() {
 
   const passwordsMatch = formData.password === formData.password_confirm && formData.password.length > 0;
 
-  // Limpiar errores cuando el usuario escribe
-  useEffect(() => {
-    const clearFieldError = (field: string) => {
-      if (errors[field]) {
-        setErrors(prev => {
-          const newErrors = { ...prev };
-          delete newErrors[field];
-          return newErrors;
-        });
-      }
-    };
-
-    Object.keys(formData).forEach(field => {
-      if (formData[field as keyof typeof formData]) {
-        clearFieldError(field);
-      }
-    });
-  }, [formData]);
+  // NO limpiar errores automáticamente para evitar recargas y redirecciones no deseadas
 
   const validateField = (name: string, value: string) => {
     switch (name) {

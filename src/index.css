@@ -39,6 +39,16 @@
   background: #555;
 }
 
+/* Hide scrollbar for navbar overflow */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* AG Grid Custom Styles */
 .ag-theme-alpine {
   --ag-header-height: 48px;

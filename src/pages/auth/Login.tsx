@@ -14,18 +14,7 @@ export default function Login() {
   const [errors, setErrors] = useState<{ username?: string; password?: string; general?: string }>({});
   const [touched, setTouched] = useState<{ username: boolean; password: boolean }>({ username: false, password: false });
 
-  // Limpiar errores cuando el usuario empiece a escribir
-  useEffect(() => {
-    if (username && errors.username) {
-      setErrors(prev => ({ ...prev, username: undefined }));
-    }
-  }, [username]);
-
-  useEffect(() => {
-    if (password && errors.password) {
-      setErrors(prev => ({ ...prev, password: undefined }));
-    }
-  }, [password]);
+  // NO limpiar errores automáticamente - solo en handleSubmit para evitar refrescado rápido
 
   const loginMutation = useMutation({
     mutationFn: () => authService.login(username, password),
